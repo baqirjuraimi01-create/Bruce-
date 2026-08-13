@@ -122,7 +122,9 @@ const Nutrition = (() => {
     const s = q.toLowerCase().trim();
     if(!s) return [];
     const pool = Store.state.customFoods.concat(
-      LOCAL_FOODS.map(f => Object.assign({}, f, { serving:100, servingLabel:'100 g', source:'Built-in' }))
+      LOCAL_FOODS.map(f => Object.assign({}, f, { serving:100, servingLabel:'100 g', source:'Built-in' })),
+      SERVING_FOODS.map(f => Object.assign({}, f, { unit:'serving', serving:100,
+                                                    servingLabel:'1 serving', source:'Per serving' }))
     );
     return pool
       .filter(f => (f.name + ' ' + (f.brand||'')).toLowerCase().includes(s))
@@ -156,12 +158,15 @@ const Nutrition = (() => {
   /* ---------- scaling ---------- */
 
   // Turn a per-100g food + a gram amount into a loggable entry.
+  // `grams` is the amount in grams, except for serving-based foods where
+  // it carries servings x 100 so the per-100 maths stays identical.
   function toEntry(food, grams, meal){
     const r = grams / 100;
     return {
       name: food.name,
       brand: food.brand || '',
       barcode: food.barcode || '',
+      unit: food.unit || 'g',
       grams: round(grams, 1),
       kcal: round(food.kcal * r, 1),
       p:    round(food.p * r, 1),

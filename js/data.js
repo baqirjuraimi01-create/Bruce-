@@ -312,8 +312,29 @@ const MEALS = [
   { key:'breakfast', label:'Breakfast' },
   { key:'lunch',     label:'Lunch' },
   { key:'dinner',    label:'Dinner' },
-  { key:'snack',     label:'Snacks' }
+  { key:'snack',     label:'Snacks' },
+  // Anything that is not a meal: a shake from a stall, a coffee, a
+  // bite of something. Counts toward the day, belongs to no sitting.
+  { key:'extras',    label:'Extras' }
 ];
 
 /* Look up a local food by id. */
 function localFood(id){ return LOCAL_FOODS.find(f => f.id === id) || null; }
+
+/* Things bought rather than cooked, where you know the cup and not the
+   gram. Values are per serving, and deliberately mid-range — a stall
+   shake varies enormously, so treat these as a starting point and edit
+   the numbers once you know your regular place. */
+const SERVING_FOODS = [
+  { id:'shake_whey',    name:'Protein shake (1 scoop, water)',   kcal:120, p:24,  c:3,   f:1.5 },
+  { id:'shake_milk',    name:'Protein shake (1 scoop, milk)',    kcal:250, p:33,  c:16,  f:6 },
+  { id:'shake_stall',   name:'Protein shake from a stall',       kcal:330, p:28,  c:38,  f:6 },
+  { id:'shake_mass',    name:'Mass gainer shake',                kcal:600, p:40,  c:90,  f:9 },
+  { id:'coffee_black',  name:'Black coffee or americano',        kcal:5,   p:0.3, c:0,   f:0 },
+  { id:'coffee_latte',  name:'Latte, regular',                   kcal:150, p:8,   c:14,  f:7 },
+  { id:'bubble_tea',    name:'Bubble tea, regular sugar',        kcal:350, p:3,   c:70,  f:7 },
+  { id:'soft_drink',    name:'Soft drink, can',                  kcal:140, p:0,   c:35,  f:0 },
+  { id:'protein_bar',   name:'Protein bar',                      kcal:210, p:20,  c:20,  f:7 },
+  { id:'energy_drink',  name:'Energy drink, can',                kcal:110, p:0,   c:27,  f:0 },
+  { id:'beer_pint',     name:'Beer, pint',                       kcal:190, p:2,   c:15,  f:0 }
+];

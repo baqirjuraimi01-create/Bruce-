@@ -172,6 +172,26 @@ barcode parsing against Open Food Facts response fixtures (including kJ-only
 products, missing nutrition data and unknown barcodes). Set `CHROME_PATH` to
 use a pre-installed Chromium.
 
+## Things that are not a meal
+
+A fifth slot, **Extras**, sits alongside breakfast / lunch / dinner / snacks for
+anything that belongs to no sitting — a shake from a stall, a coffee, a bite of
+something. It counts toward the day's totals exactly like everything else, and
+it is never chosen by the time-of-day guess, so it only holds what you put
+there deliberately.
+
+Entries can be measured in **servings** instead of grams. A packet has a
+per-100 g column; a cup from a stall does not — you know roughly what one of
+them contains and nothing more. Manual entry therefore defaults to *per
+serving*, and the portion picker then counts servings (0.5, 1, 1.5, 2). Under
+the hood a serving is stored as 100 in the grams field, so the per-100 maths
+and every total, average and learned meal work unchanged.
+
+`SERVING_FOODS` in `js/data.js` seeds a few of these — shakes, coffees, bubble
+tea, protein bars — as mid-range starting points. They vary enormously between
+stalls, so edit the numbers once you know your regular place; a food saved by
+hand is reused from search forever after.
+
 ## Eating out
 
 You cannot weigh a restaurant plate and you cannot see the oil, which is where

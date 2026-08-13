@@ -93,12 +93,19 @@ const FoodView = (() => {
     return ' — a yogurt or a glass of milk closes the gap.';
   }
 
+  /* Serving-based entries carry servings x 100 in `grams`. */
+  function amountLabel(e){
+    if(e.unit !== 'serving') return round(e.grams, 0) + ' g';
+    const n = round(e.grams / 100, 2);
+    return n + (n === 1 ? ' serving' : ' servings');
+  }
+
   function entryRow(e){
     return `
       <div class="item">
         <div class="grow">
           <div class="t">${esc(e.name)}</div>
-          <div class="s">${round(e.grams,0)} g${e.brand ? ' · ' + esc(e.brand) : ''} · ${Math.round(e.kcal)} kcal · P${Math.round(e.p)} C${Math.round(e.c)} F${Math.round(e.f)}</div>
+          <div class="s">${amountLabel(e)}${e.brand ? ' · ' + esc(e.brand) : ''} · ${Math.round(e.kcal)} kcal · P${Math.round(e.p)} C${Math.round(e.c)} F${Math.round(e.f)}</div>
         </div>
         <button class="x" data-act="editEntry" data-id="${e.id}" aria-label="Edit">&#9998;</button>
         <button class="x" data-act="delEntry" data-id="${e.id}" aria-label="Delete">&#10005;</button>
@@ -248,19 +255,22 @@ const FoodView = (() => {
   /* ---------------- portion picker ---------------- */
 
   function openPortion(date, meal, food){
-    const start = food.serving && food.serving > 0 ? round(food.serving,0) : 100;
+    const byServing = food.unit === 'serving';
+    const start = byServing ? 1 : (food.serving && food.serving > 0 ? round(food.serving,0) : 100);
     openSheet(`
       <h2>${esc(food.name)}</h2>
       <div class="small muted" style="margin:-6px 0 12px">
-        ${food.brand ? esc(food.brand) + ' · ' : ''}per 100 g: ${Math.round(food.kcal)} kcal · P${food.p} C${food.c} F${food.f}
+        ${food.brand ? esc(food.brand) + ' · ' : ''}per ${byServing ? 'serving' : '100 g'}: ${Math.round(food.kcal)} kcal · P${food.p} C${food.c} F${food.f}
         ${food.source ? `<span class="tag">${esc(food.source)}</span>` : ''}
       </div>
-      <label class="f"><span>Amount in grams</span>
-        <input type="number" id="gIn" inputmode="decimal" step="1" value="${start}">
+      <label class="f"><span>${byServing ? 'How many servings' : 'Amount in grams'}</span>
+        <input type="number" id="gIn" inputmode="decimal" step="${byServing ? '0.25' : '1'}" value="${start}">
       </label>
       <div class="chips" style="margin-bottom:12px">
-        ${[30,50,100,150,200,250].map(g => `<button class="chip" data-g="${g}">${g} g</button>`).join('')}
-        ${food.serving && food.serving !== 100 ? `<button class="chip" data-g="${round(food.serving,0)}">1 serving (${esc(food.servingLabel||'')})</button>` : ''}
+        ${byServing
+          ? [0.5,1,1.5,2].map(n => `<button class="chip" data-g="${n}">${n} serving${n===1?'':'s'}</button>`).join('')
+          : [30,50,100,150,200,250].map(g => `<button class="chip" data-g="${g}">${g} g</button>`).join('') +
+            (food.serving && food.serving !== 100 ? `<button class="chip" data-g="${round(food.serving,0)}">1 serving (${esc(food.servingLabel||'')})</button>` : '')}
       </div>
       <label class="f"><span>Meal</span>
         <select id="mIn">${MEALS.map(m => `<option value="${m.key}"${m.key===meal?' selected':''}>${m.label}</option>`).join('')}</select>
@@ -274,7 +284,7 @@ const FoodView = (() => {
       const g = body.querySelector('#gIn');
       const preview = body.querySelector('#preview');
       const paint = () => {
-        const grams = parseFloat(g.value) || 0;
+        const grams = (parseFloat(g.value) || 0) * (byServing ? 100 : 1);
         const e = Nutrition.toEntry(food, grams, meal);
         preview.innerHTML = `<div class="row between"><b class="mono">${Math.round(e.kcal)} kcal</b>
           <span class="small mono">P ${round(e.p,1)}g · C ${round(e.c,1)}g · F ${round(e.f,1)}g</span></div>`;
@@ -283,8 +293,9 @@ const FoodView = (() => {
       body.querySelectorAll('.chip').forEach(c => c.onclick = () => { g.value = c.dataset.g; paint(); });
       body.querySelector('#cancel').onclick = closeSheet;
       body.querySelector('#add').onclick = () => {
-        const grams = parseFloat(g.value);
-        if(!grams || grams <= 0) return toast('Enter an amount');
+        const raw = parseFloat(g.value);
+        if(!raw || raw <= 0) return toast('Enter an amount');
+        const grams = raw * (byServing ? 100 : 1);
         Store.addEntry(date, Nutrition.toEntry(food, grams, body.querySelector('#mIn').value));
         if(food.barcode) Store.saveFood(food);
         closeSheet(); toast('Logged'); App.refresh();
@@ -297,10 +308,11 @@ const FoodView = (() => {
   function editEntry(date, id){
     const e = Store.day(date).entries.find(x => x.id === id);
     if(!e) return;
+    const byServing = e.unit === 'serving';
     openSheet(`
       <h2>${esc(e.name)}</h2>
-      <label class="f"><span>Amount in grams</span>
-        <input type="number" id="gIn" step="1" value="${round(e.grams,0)}"></label>
+      <label class="f"><span>${byServing ? 'How many servings' : 'Amount in grams'}</span>
+        <input type="number" id="gIn" step="${byServing ? '0.25' : '1'}" value="${byServing ? round(e.grams/100,2) : round(e.grams,0)}"></label>
       <div class="row" style="gap:8px">
         <button class="btn danger" id="del">Delete</button>
         <button class="btn grow" id="save">Save</button>
@@ -309,7 +321,7 @@ const FoodView = (() => {
       body.querySelector('#save').onclick = () => {
         const v = parseFloat(body.querySelector('#gIn').value);
         if(!v || v <= 0) return toast('Enter an amount');
-        Store.updateEntry(date, id, v);
+        Store.updateEntry(date, id, v * (byServing ? 100 : 1));
         closeSheet(); App.refresh();
       };
       body.querySelector('#del').onclick = () => {
@@ -326,8 +338,16 @@ const FoodView = (() => {
       ${barcode ? `<div class="hint" style="margin-top:-4px">Barcode ${esc(barcode)} has no usable nutrition data. Copy the numbers off the label — it will be saved, so the next scan of this product is instant.</div>` : ''}
       <div class="sp"></div>
       <label class="f"><span>Name</span><input type="text" id="nIn" value="${esc(partial?.name || '')}" placeholder="e.g. Protein bar, cookies &amp; cream"></label>
-      <label class="f"><span>Brand (optional)</span><input type="text" id="bIn" value="${esc(partial?.brand || '')}"></label>
-      <div class="small muted" style="margin-bottom:6px">Values per 100 g (that is what the label's second column shows)</div>
+      <label class="f"><span>Brand or stall (optional)</span><input type="text" id="bIn" value="${esc(partial?.brand || '')}"></label>
+
+      <div class="small muted" style="margin-bottom:6px">These numbers are…</div>
+      <div class="seg" id="basis">
+        <button data-basis="serving" class="on">Per serving</button>
+        <button data-basis="100">Per 100 g</button>
+      </div>
+      <div class="hint" id="basisHint" style="margin-top:-4px"></div>
+      <div class="sp"></div>
+
       <div class="grid2">
         <label class="f"><span>Calories</span><input type="number" id="kIn" inputmode="decimal" value="${partial?.kcal || ''}"></label>
         <label class="f"><span>Protein g</span><input type="number" id="pIn" inputmode="decimal" value="${partial?.p || ''}"></label>
@@ -336,6 +356,21 @@ const FoodView = (() => {
       </div>
       <button class="btn wide" id="save">Save food</button>
     `, body => {
+      // A label gives you per-100 g. A cup from a stall does not — you know
+      // roughly what one of them contains, and nothing else.
+      let basis = 'serving';
+      const hint = body.querySelector('#basisHint');
+      const paintBasis = () => {
+        body.querySelectorAll('[data-basis]').forEach(b =>
+          b.classList.toggle('on', b.dataset.basis === basis));
+        hint.textContent = basis === 'serving'
+          ? 'For one cup, bottle or scoop — the usual case when there is no label.'
+          : "The label's per-100 g column. Best when you will weigh it.";
+      };
+      body.querySelectorAll('[data-basis]').forEach(b =>
+        b.onclick = () => { basis = b.dataset.basis; paintBasis(); });
+      paintBasis();
+
       body.querySelector('#save').onclick = () => {
         const food = {
           id: 'man_' + uid(),
@@ -346,7 +381,10 @@ const FoodView = (() => {
           p: parseFloat(body.querySelector('#pIn').value) || 0,
           c: parseFloat(body.querySelector('#cIn').value) || 0,
           f: parseFloat(body.querySelector('#fIn').value) || 0,
-          serving: 100, servingLabel:'100 g', source:'Saved by you'
+          unit: basis === 'serving' ? 'serving' : 'g',
+          serving: 100,
+          servingLabel: basis === 'serving' ? '1 serving' : '100 g',
+          source: 'Saved by you'
         };
         if(!food.kcal && !food.p && !food.c && !food.f) return toast('Fill in the macros first');
         // If calories were left blank, derive them from the macros.
@@ -447,7 +485,7 @@ const FoodView = (() => {
         const mealKey = body.querySelector('#eoMeal').value;
         // Stored as a 1-portion entry so editing grams later scales it sanely.
         Store.addEntry(date, {
-          name: r.label, brand:'', barcode:'', grams:100,
+          name: r.label, brand:'', barcode:'', unit:'serving', grams:100,
           kcal:r.kcal, p:r.p, c:r.c, f:r.f, meal:mealKey, source:'Estimate'
         });
         closeSheet();

@@ -431,6 +431,71 @@ await check('data survives reload', async () => {
   if(!/Test Bar/.test(t)) throw new Error('log lost on reload');
 });
 
+console.log('— logging something that is not a meal —');
+await check('there is an Extras slot alongside the meals', async () => {
+  await page.click('[data-tab="food"]'); await page.waitForTimeout(250);
+  const heads = await page.$$eval('.meal-title h3', e => e.map(x => x.textContent.trim().replace(/\d+$/,'')));
+  if(!heads.some(h => /Extras/.test(h))) throw new Error('slots: ' + heads.join(', '));
+  console.log('       ' + heads.join(' · '));
+});
+
+await check('an unlabelled shake logs by serving, not grams', async () => {
+  await page.click('[data-act="search"][data-meal="extras"]'); await page.waitForTimeout(300);
+  await page.click('#qManual'); await page.waitForTimeout(300);
+  // "Per serving" is the default — a stall cup has no per-100g label
+  const on = await page.locator('#basis button.on').textContent();
+  if(!/Per serving/.test(on)) throw new Error('default basis was: ' + on);
+  await page.fill('#nIn', 'Stall protein shake');
+  await page.fill('#bIn', 'Gym stall');
+  await page.fill('#kIn', '330'); await page.fill('#pIn', '28');
+  await page.fill('#cIn', '38');  await page.fill('#fIn', '6');
+  await page.click('#save'); await page.waitForTimeout(300);
+
+  // portion sheet should now count servings
+  const label = await page.locator('.sheet label.f span').first().textContent();
+  if(!/servings/i.test(label)) throw new Error('portion asked for: ' + label);
+  await page.click('#add'); await page.waitForTimeout(350);
+
+  const e = await page.evaluate(() => {
+    const es = Store.day(today()).entries;
+    return es[es.length - 1];
+  });
+  if(e.meal !== 'extras') throw new Error('landed in ' + e.meal);
+  if(e.unit !== 'serving') throw new Error('unit was ' + e.unit);
+  if(Math.round(e.kcal) !== 330) throw new Error('kcal ' + e.kcal + ' — one serving should be the full amount');
+  if(Math.round(e.p) !== 28) throw new Error('protein ' + e.p);
+  if(!/1 serving/.test(await page.textContent('#view'))) throw new Error('not shown as a serving');
+  console.log('       logged 1 serving = 330 kcal / 28 g P under Extras');
+});
+
+await check('half a serving halves the macros', async () => {
+  await page.click('[data-act="search"][data-meal="extras"]'); await page.waitForTimeout(300);
+  await page.fill('#qIn', 'Stall protein'); await page.waitForTimeout(400);
+  await page.click('#qRes .item'); await page.waitForTimeout(300);
+  await page.fill('#gIn', '0.5'); await page.waitForTimeout(200);
+  await page.click('#add'); await page.waitForTimeout(350);
+  const e = await page.evaluate(() => { const es = Store.day(today()).entries; return es[es.length-1]; });
+  if(Math.round(e.kcal) !== 165) throw new Error('half a serving came to ' + e.kcal);
+  console.log('       0.5 serving = 165 kcal, saved food reusable from search');
+});
+
+await check('built-in per-serving items are searchable', async () => {
+  await page.click('[data-act="search"][data-meal="extras"]'); await page.waitForTimeout(300);
+  await page.fill('#qIn', 'shake'); await page.waitForTimeout(400);
+  const names = await page.$$eval('#qRes .item .t', e => e.map(x => x.textContent.trim()));
+  if(!names.some(n => /Protein shake/i.test(n))) throw new Error('no shakes: ' + names.join(', '));
+  console.log('       ' + names.slice(0,3).join(', '));
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+});
+
+await check('Extras stays out of the meal-time guess', async () => {
+  const guessed = await page.evaluate(() => {
+    const h = new Date().getHours();
+    return h < 11 ? 'breakfast' : h < 16 ? 'lunch' : h < 21 ? 'dinner' : 'snack';
+  });
+  if(guessed === 'extras') throw new Error('extras should never be auto-picked');
+});
+
 console.log('— eating out —');
 await check('the estimator opens and reacts to what you pick', async () => {
   await page.click('[data-tab="food"]'); await page.waitForTimeout(250);
