@@ -14,6 +14,9 @@ const App = (() => {
   function refresh(){
     const root = document.getElementById('view');
     const scroll = window.scrollY;
+    // The Plan tab shows a floating rail; reserve a gutter so it never
+    // sits on top of the cards' own controls.
+    root.className = 'view' + (tab === 'plan' ? ' with-rail' : '');
     VIEWS[tab].render(root, date);
     paintHeader();
     window.scrollTo(0, scroll);

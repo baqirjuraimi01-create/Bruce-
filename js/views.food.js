@@ -11,8 +11,10 @@ const FoodView = (() => {
     const proteinLeft = Math.max(0, tgt.protein - tot.p);
 
     let html = `
+      <h1 class="page-h">Today's<br>Intake<small>${esc(prettyDate(date))} · ${Store.day(date).entries.length} items logged</small></h1>
+
       <div class="card">
-        <h2>Today's intake</h2>
+        ${cardHead('Macros', 'search')}
         ${macroBlock(tot, tgt)}
         <div class="hr"></div>
         <div class="row wrap" style="gap:8px">
@@ -23,11 +25,11 @@ const FoodView = (() => {
       </div>
 
       <div class="card">
-        <h2>Quick add — your meals</h2>
+        ${cardHead('Your meals')}
         <div class="chips">
           ${PRESET_MEALS.map((m,i) => `<button class="chip" data-act="preset" data-i="${i}">${esc(m.name)}</button>`).join('')}
         </div>
-        <div class="hint">These are your meals with the fixes applied — tap to log the whole thing, then adjust any item.</div>
+        <div class="hint">Tap to log the whole meal, then adjust any item.</div>
       </div>
     `;
 
@@ -36,13 +38,12 @@ const FoodView = (() => {
       const mt = Store.totalsByMeal(date, m.key);
       html += `
         <div class="meal-title">
-          <h3>${m.label}</h3>
+          <h3>${m.label}${entries.length ? badge(entries.length) : ''}</h3>
           <span class="small muted mono">${mt.kcal} kcal · ${mt.p}g P</span>
         </div>
-        <div class="card" style="padding:10px 14px">
+        <div class="card" style="padding:6px 18px 16px">
           ${entries.length ? entries.map(entryRow).join('') : `<div class="empty">Nothing logged</div>`}
-          <div class="hr" style="margin:10px 0 8px"></div>
-          <div class="row" style="gap:8px">
+          <div class="row" style="gap:7px;margin-top:6px">
             <button class="btn ghost sm grow" data-act="scan" data-meal="${m.key}">Scan</button>
             <button class="btn ghost sm grow" data-act="search" data-meal="${m.key}">Search</button>
             <button class="btn ghost sm grow" data-act="quick" data-meal="${m.key}">Recent</button>
@@ -52,7 +53,7 @@ const FoodView = (() => {
 
     html += `
       <div class="card">
-        <h2>Bodyweight</h2>
+        ${cardHead('Bodyweight')}
         <div class="row" style="gap:8px">
           <input type="number" step="0.1" id="wIn" placeholder="kg" value="${Store.day(date).weight || ''}">
           <button class="btn" data-act="saveWeight">Save</button>

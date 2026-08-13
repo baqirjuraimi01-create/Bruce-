@@ -11,19 +11,20 @@ const CardioView = (() => {
     const wk = weekTotals(date);
 
     root.innerHTML = `
+      <h1 class="page-h">Cardio<small>${esc(prettyDate(date))} · ${esc(day.name)}</small></h1>
       ${day.cardio ? `
         <div class="card">
-          <h2>Scheduled today</h2>
+          ${cardHead('Scheduled today')}
           <div style="font-size:16px;font-weight:600">${day.cardio.mode === 'run' ? 'Run' : 'Walk'} — ${esc(day.cardio.minutes)} min</div>
           <div class="hint">${esc(day.cardio.effort)}</div>
         </div>` : `
         <div class="card">
-          <h2>Scheduled today</h2>
+          ${cardHead('Scheduled today')}
           <div class="small muted">No run scheduled — today is ${esc(day.name)}. A 10-20 min easy walk after lifting is still a good idea.</div>
         </div>`}
 
       <div class="card">
-        <h2>Log a session</h2>
+        ${cardHead('Log a session')}
         <div class="chips" style="margin-bottom:10px">
           <button class="chip on" data-mode="run">Run</button>
           <button class="chip" data-mode="walk">Walk</button>
@@ -37,15 +38,17 @@ const CardioView = (() => {
       </div>
 
       <div class="card">
-        <h2>Today</h2>
+        ${cardHead('Today')}
         ${items.length ? items.map(row).join('') : `<div class="empty">Nothing logged</div>`}
       </div>
 
       <div class="card">
-        <h2>Last 7 days</h2>
-        <div class="row between"><span>Total time</span><b class="mono">${wk.min} min</b></div>
-        <div class="row between"><span>Total distance</span><b class="mono">${round(wk.km,1)} km</b></div>
-        <div class="row between"><span>Sessions</span><b class="mono">${wk.n}</b></div>
+        ${cardHead('Last 7 days')}
+        ${statCols([
+          { value: wk.min, unit:'min', label:'Time',     pct: clamp(wk.min/2.4,0,100),  color:'var(--blue)' },
+          { value: round(wk.km,1), unit:'km', label:'Distance', pct: clamp(wk.km*2,0,100), color:'var(--pink)' },
+          { value: wk.n, unit:'', label:'Sessions',      pct: clamp(wk.n*20,0,100),     color:'var(--lime)' }
+        ])}
         <div class="hr"></div>
         <div class="row between"><span class="small muted">Previous 7 days</span><span class="small mono muted">${wk.prevMin} min</span></div>
         <div class="hint">${loadAdvice(wk)}</div>

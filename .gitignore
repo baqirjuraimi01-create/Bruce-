@@ -1,3 +1,4 @@
 node_modules/
 test/shot-*.png
+test/s-*.png
 .DS_Store

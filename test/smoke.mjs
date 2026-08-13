@@ -33,7 +33,8 @@ await check('macros update after preset', async () => {
   console.log('       breakfast preset =', kcal.trim(), 'kcal');
 });
 await check('protein number is sane for breakfast preset', async () => {
-  const rows = await page.$$eval('.macro', els => els.map(e => e.textContent.replace(/\s+/g,' ').trim()));
+  const rows = await page.$$eval('.stat', els => els.map(e => e.textContent.replace(/\s+/g,' ').trim()));
+  if(rows.length !== 3) throw new Error('expected 3 macro columns, got ' + rows.length);
   console.log('       ' + rows.join(' | '));
 });
 await check('search sheet opens + local search works', async () => {
@@ -141,7 +142,12 @@ await check('progress renders', async () => {
   await page.waitForTimeout(250);
   const t = await page.textContent('#view');
   if(!/Protein adherence/.test(t)) throw new Error('missing');
-  if(!/Barbell Bench Press/.test(t)) throw new Error('lift table missing');
+  // Lift table now lives behind the Training segment.
+  await page.locator('.seg button', { hasText:'Training' }).click();
+  await page.waitForTimeout(200);
+  if(!/Barbell Bench Press/.test(await page.textContent('#view'))) throw new Error('lift table missing');
+  await page.locator('.seg button', { hasText:'Nutrition' }).click();
+  await page.waitForTimeout(200);
   const m = t.match(/Calculated:\s*([\d]+ kcal · P \d+ g · C \d+ g · F \d+ g)/);
   console.log('       targets:', m ? m[1] : 'n/a');
 });

@@ -17,14 +17,19 @@ const TrainView = (() => {
     if(sess.dayKey !== day.key && Object.keys(sess.exercises).length === 0) sess.dayKey = day.key;
 
     let html = `
+      <h1 class="page-h">${esc(day.name)}<small>Cycle ${cycleNo} · day ${Store.cycleIndexFor(date)+1} of ${PROGRAM.length}</small></h1>
+
       <div class="card">
-        <div class="row between">
-          <div>
-            <div class="small muted">Cycle ${cycleNo} · day ${Store.cycleIndexFor(date)+1} of ${PROGRAM.length}</div>
-            <h2 style="margin:2px 0 4px;font-size:20px;text-transform:none;color:var(--fg)">${esc(day.name)}</h2>
-            <div class="small muted">${esc(day.focus || '')}</div>
-          </div>
-          <button class="btn ghost sm" data-act="shift">Shift</button>
+        <div class="cardhead">
+          <div class="grow"><h2>${esc(day.focus || 'Session')}</h2></div>
+          <button class="iconbtn" data-act="shift" aria-label="Adjust rotation">⇄</button>
+        </div>
+        <div class="chips">
+          <span class="chip flat">${esc(day.type === 'lift' ? 'Lifting' : day.type === 'cardio' ? 'Cardio' : 'Rest')}</span>
+          ${(day.exercises||[]).length ? `<span class="chip flat">${day.exercises.length} exercises</span>` : ''}
+          ${(day.exercises||[]).some(e => e.tag === 'core') ? `<span class="chip flat">Core block</span>` : ''}
+          ${(day.exercises||[]).some(e => e.tag === 'stab') ? `<span class="chip flat">Stability</span>` : ''}
+          ${day.cardio ? `<span class="chip flat">${esc(day.cardio.minutes)} min ${day.cardio.mode}</span>` : ''}
         </div>
         ${day.note ? `<div class="hint">${esc(day.note)}</div>` : ''}
         ${day.cardio ? cardioCard(day) : ''}
@@ -37,7 +42,7 @@ const TrainView = (() => {
       return;
     }
 
-    html += `<div class="card"><h2>Session</h2>`;
+    html += `<div class="card">${cardHead('Session')}`;
     (day.exercises || []).forEach((ex, i) => { html += exerciseCard(ex, i, date, sess); });
     html += `
       ${day.finisher ? `<div class="hint">Finish: ${esc(day.finisher)}</div>` : ''}
@@ -68,7 +73,7 @@ const TrainView = (() => {
             <div class="n">${esc(ex.name)} ${ex.tag ? `<span class="tag ${ex.tag}">${ex.tag === 'core' ? 'core' : 'stability'}</span>` : ''}</div>
             <div class="p">${ex.sets} × ${esc(ex.reps)}${ex.rest ? ` · ${ex.rest}s rest` : ''}</div>
           </div>
-          <button class="btn ghost sm" data-act="rest" data-sec="${ex.rest||90}">Timer</button>
+          <button class="iconbtn" data-act="rest" data-sec="${ex.rest||90}" aria-label="Rest timer">◷</button>
         </div>
         ${last ? `<div class="hint">Last time (${prettyDate(last.date)}): ${last.sets.map(s => `${s.w||'-'}kg × ${s.r||'-'}`).join(', ')}</div>` : ''}
         ${saved.map((s, si) => `
@@ -90,8 +95,8 @@ const TrainView = (() => {
   function volumeCard(date){
     const v = Store.sessionVolume(date);
     if(!v) return '';
-    return `<div class="card"><h2>Volume today</h2>
-      <div class="kcal-big mono">${v.toLocaleString()} <span class="muted" style="font-size:14px">kg lifted</span></div>
+    return `<div class="card">${cardHead('Volume today')}
+      <div class="kcal-big mono">${v.toLocaleString()}<sup>kg lifted</sup></div>
       <div class="hint">Weight × reps across completed sets. Useful as a week-to-week trend, not as a target in itself.</div></div>`;
   }
 

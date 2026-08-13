@@ -51,28 +51,73 @@ function bar(value, target, color){
   return `<div class="bar${over ? ' over' : ''}"><i style="width:${clamp(pct,0,100)}%;background:${color}"></i></div>`;
 }
 
-/* Macro block used on the Food tab and in the day summary. */
-function macroBlock(tot, tgt){
-  const line = (label, val, target, color, unit='g') => `
-    <div class="macro">
-      <div class="row between">
-        <span>${label}</span>
-        <span class="mono">${val}${unit} <span class="pct">/ ${target}${unit}</span></span>
-      </div>
-      ${bar(val, target, color)}
-    </div>`;
-  const left = tgt.kcal - tot.kcal;
-  return `
-    <div class="kcal-head">
-      <span class="kcal-big mono">${tot.kcal}</span>
-      <span class="muted">/ ${tgt.kcal} kcal</span>
-      <span class="grow"></span>
-      <span class="small ${left < 0 ? 'muted' : ''}">${left >= 0 ? left + ' left' : Math.abs(left) + ' over'}</span>
+/* Card header: title on the left, optional circular action button right. */
+function cardHead(title, act, glyph = '↗'){
+  return `<div class="cardhead">
+    <h2>${title}</h2>
+    ${act ? `<button class="iconbtn" data-act="${act}" aria-label="${esc(title)}">${glyph}</button>` : ''}
+  </div>`;
+}
+
+/* Count badge, as on the reference's tab row. */
+function badge(n, light){ return `<span class="badge${light ? ' light' : ''}">${n}</span>`; }
+
+/* Segmented control. items = [{key,label,count}] */
+function seg(items, active, act){
+  return `<div class="seg">${items.map(i => `
+    <button class="${i.key === active ? 'on' : ''}" data-act="${act}" data-key="${i.key}">
+      ${esc(i.label)}${i.count != null ? badge(i.count, i.key !== active) : ''}
+    </button>`).join('')}</div>`;
+}
+
+/* Donut ring with a value in the middle. */
+function donut(pct, big, unit, sub, color = 'var(--ink)'){
+  const R = 62, C = 2 * Math.PI * R;
+  const p = clamp(pct, 0, 100);
+  const dash = p / 100 * C;
+  return `<div class="donut">
+    <svg viewBox="0 0 146 146" aria-hidden="true">
+      <circle cx="73" cy="73" r="${R}" fill="none" stroke="var(--track)" stroke-width="10"/>
+      ${p > 0 ? `<circle cx="73" cy="73" r="${R}" fill="none" stroke="${color}" stroke-width="10"
+              stroke-linecap="round" stroke-dasharray="${dash} ${C - dash}"/>` : ''}
+    </svg>
+    <div class="c">
+      <div class="kcal-big mono">${big}${unit ? `<sup>${esc(unit)}</sup>` : ''}</div>
+      ${sub ? `<div class="sub">${esc(sub)}</div>` : ''}
     </div>
-    ${bar(tot.kcal, tgt.kcal, 'var(--accent)')}
-    ${line('Protein', tot.p, tgt.protein, 'var(--prot)')}
-    ${line('Carbs',   tot.c, tgt.carbs,   'var(--carb)')}
-    ${line('Fat',     tot.f, tgt.fat,     'var(--fat)')}
+  </div>`;
+}
+
+/* Three stat columns, each with a thin coloured bar underneath. */
+function statCols(cols){
+  return `<div class="stats">${cols.map(c => `
+    <div class="stat">
+      <div class="v mono">${c.value}${c.unit ? `<span>${esc(c.unit)}</span>` : ''}</div>
+      <div class="l">${esc(c.label)}</div>
+      ${bar(c.pct, 100, c.color)}
+    </div>`).join('')}</div>`;
+}
+
+/* Macro block: calorie donut + protein/carbs/fat columns. */
+function macroBlock(tot, tgt){
+  const left = tgt.kcal - tot.kcal;
+  const pct = t => tgt[t] > 0 ? (tot[t === 'protein' ? 'p' : t === 'carbs' ? 'c' : 'f'] / tgt[t]) * 100 : 0;
+  return `
+    <div class="donutwrap">
+      ${donut((tot.kcal/tgt.kcal)*100, tot.kcal.toLocaleString(), 'kcal',
+              left >= 0 ? left.toLocaleString() + ' left' : Math.abs(left).toLocaleString() + ' over')}
+      <div class="grow">
+        <div class="small muted">Target</div>
+        <div style="font-size:19px;font-weight:500;letter-spacing:-.03em;margin-top:2px" class="mono">${tgt.kcal.toLocaleString()}<span class="muted" style="font-size:11px;font-weight:400"> kcal</span></div>
+        <div class="ticks" style="margin-top:14px"><i style="width:${clamp((tot.kcal/tgt.kcal)*100,0,100)}%"></i></div>
+        <div class="tiny muted" style="margin-top:7px">${Math.round((tot.kcal/tgt.kcal)*100)}% of target</div>
+      </div>
+    </div>
+    ${statCols([
+      { value: tot.p, unit:'g', label:'Protein', pct: pct('protein'), color:'var(--blue)' },
+      { value: tot.c, unit:'g', label:'Carbs',   pct: pct('carbs'),   color:'var(--pink)' },
+      { value: tot.f, unit:'g', label:'Fat',     pct: pct('fat'),     color:'var(--lime)' }
+    ])}
   `;
 }
 

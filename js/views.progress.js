@@ -5,58 +5,84 @@
 
 const ProgressView = (() => {
 
+  // Which sub-section the segmented control is showing.
+  let sub = 'nutrition';
+
   function render(root, date){
     const tgt = Store.targets();
     const days = last(date, 14);
     const hitDays = days.filter(d => Store.totalsFor(d).p >= tgt.protein * 0.9).length;
     const logged = days.filter(d => Store.day(d).entries.length).length;
     const w = Store.weightSeries();
+    const lifts = days.filter(d => Store.state.sessions[d] && Object.keys(Store.state.sessions[d].exercises).length).length;
+
+    const panels = {
+      nutrition: `
+        <div class="card">
+          ${cardHead('Protein adherence', 'protInfo')}
+          <div class="donutwrap">
+            ${donut(logged ? (hitDays/logged)*100 : 0, hitDays, '/ ' + (logged || 0), 'days on target')}
+            <div class="grow">
+              <div class="small muted">Target</div>
+              <div style="font-size:19px;font-weight:500;letter-spacing:-.03em;margin-top:2px" class="mono">${tgt.protein}<span class="muted" style="font-size:11px;font-weight:400"> g protein</span></div>
+              <div class="chips" style="margin-top:12px"><span class="chip flat">Last 14 days</span></div>
+            </div>
+          </div>
+          <div class="spark">
+            ${days.map(d => {
+              const p = Store.totalsFor(d).p;
+              const h = clamp((p / (tgt.protein*1.2)) * 100, 2, 100);
+              return `<i class="${p >= tgt.protein*0.9 ? '' : 'miss'}" style="height:${h}%" title="${d}: ${p}g"></i>`;
+            }).join('')}
+          </div>
+          <div class="hint">Bars are daily protein; solid blue means you hit at least 90% of your ${tgt.protein} g target. This one number predicts whether you keep your muscle better than any other in the app.</div>
+        </div>`,
+
+      training: `
+        <div class="card">
+          ${cardHead('Lift progression')}
+          ${liftTable(date)}
+          <div class="hint">Top set from your most recent session for each main lift. If a number has not moved in three cycles, that lift needs a change — more sets, a deload, or a different variation.</div>
+        </div>
+
+        <div class="card">
+          ${cardHead('Last 14 days')}
+          ${trainingSummary(date)}
+        </div>`,
+
+      body: `
+        <div class="card">
+          ${cardHead('Bodyweight')}
+          ${w.length >= 2 ? `
+            <div class="row between">
+              <div><div class="kcal-big mono">${w[w.length-1].kg}<sup>kg</sup></div>
+                <div class="small muted" style="margin-top:4px">latest — ${prettyDate(w[w.length-1].date)}</div></div>
+              <div class="right"><div class="mono" style="font-size:18px;font-weight:500;letter-spacing:-.03em">${trend(w)}</div>
+                <div class="small muted">per week (last 4)</div></div>
+            </div>
+            <div class="spark">${sparkWeights(w.slice(-20))}</div>
+          ` : `<div class="empty">Log your weight on the Food tab a few times and the trend appears here.</div>`}
+        </div>`
+    };
 
     root.innerHTML = `
-      <div class="card">
-        <h2>Protein adherence — 14 days</h2>
-        <div class="kcal-big mono">${hitDays}<span class="muted" style="font-size:15px"> / ${logged || 0} days logged</span></div>
-        <div class="spark">
-          ${days.map(d => {
-            const p = Store.totalsFor(d).p;
-            const h = clamp((p / (tgt.protein*1.2)) * 100, 2, 100);
-            return `<i class="${p >= tgt.protein*0.9 ? '' : 'miss'}" style="height:${h}%" title="${d}: ${p}g"></i>`;
-          }).join('')}
-        </div>
-        <div class="hint">Bars are daily protein; solid blue means you hit at least 90% of your ${tgt.protein} g target. This one number predicts whether you keep your muscle better than any other in the app.</div>
-      </div>
+      <h1 class="page-h">Progress<small>${esc(prettyDate(date))} · cycle ${Store.cycleNumberFor(date)}</small></h1>
+
+      ${seg([
+        { key:'nutrition', label:'Nutrition', count:hitDays },
+        { key:'training',  label:'Training',  count:lifts },
+        { key:'body',      label:'Body',      count:w.length }
+      ], sub, 'sub')}
+
+      ${panels[sub]}
 
       <div class="card">
-        <h2>Bodyweight</h2>
-        ${w.length >= 2 ? `
-          <div class="row between">
-            <div><div class="kcal-big mono">${w[w.length-1].kg} <span class="muted" style="font-size:14px">kg</span></div>
-              <div class="small muted">latest — ${prettyDate(w[w.length-1].date)}</div></div>
-            <div class="right"><div class="mono" style="font-size:18px">${trend(w)}</div>
-              <div class="small muted">per week (last 4 entries)</div></div>
-          </div>
-          <div class="spark">${sparkWeights(w.slice(-20))}</div>
-        ` : `<div class="empty">Log your weight on the Food tab a few times and the trend appears here.</div>`}
-      </div>
-
-      <div class="card">
-        <h2>Lift progression</h2>
-        ${liftTable(date)}
-        <div class="hint">Top set from your most recent session for each main lift. If a number has not moved in three cycles, that lift needs a change — more sets, a deload, or a different variation.</div>
-      </div>
-
-      <div class="card">
-        <h2>Training — last 14 days</h2>
-        ${trainingSummary(date)}
-      </div>
-
-      <div class="card">
-        <h2>Targets</h2>
+        ${cardHead('Targets')}
         ${settingsForm(tgt)}
       </div>
 
       <div class="card">
-        <h2>Data</h2>
+        ${cardHead('Data')}
         <div class="row wrap" style="gap:8px">
           <button class="btn ghost grow" data-act="export">Export backup</button>
           <button class="btn ghost grow" data-act="import">Import backup</button>
@@ -163,6 +189,9 @@ const ProgressView = (() => {
   }
 
   function wire(root, date){
+    on(root, 'sub', el => { sub = el.dataset.key; App.refresh(); });
+    on(root, 'protInfo', () => toast('Aim for 90%+ of your protein target on most days'));
+
     on(root, 'saveSettings', () => {
       const p = Store.state.profile;
       p.weightKg = parseFloat(root.querySelector('#pw').value) || p.weightKg;

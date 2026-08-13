@@ -34,10 +34,21 @@ numbers forward.
 load comparison that warns you when mileage is climbing faster than your
 connective tissue can keep up with.
 
-**Progress** — 14-day protein adherence, bodyweight trend, top set per main
-lift, training volume, your targets, and JSON export/import.
+**Progress** — segmented into Nutrition (14-day protein adherence), Training
+(top set per main lift, volume) and Body (bodyweight trend), with your targets
+and JSON export/import below.
 
 **Plan** — the whole program and the nutrition reasoning, readable at the gym.
+
+## Design
+
+Light theme throughout: white cards floating on a soft grey ground, large
+light-weight headings, pill chips, a calorie donut with thin macro bars,
+segmented controls with count badges, and a dark floating rail on the Plan tab
+for jumping between sections. Icons are inline SVG, so there are no font or
+image requests. Layout tokens live at the top of `css/styles.css` — the
+palette, corner radii and the three shadow levels are all CSS custom
+properties, so retheming is a matter of editing `:root`.
 
 ## Barcode scanning
 

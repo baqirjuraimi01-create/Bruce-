@@ -9,19 +9,28 @@ const PlanView = (() => {
     const todayIdx = Store.cycleIndexFor(date);
 
     root.innerHTML = `
-      <div class="card doc">
-        <h2>The rotation</h2>
+      <h1 class="page-h">Your Plan<small>9-day rotation · nutrition · progression</small></h1>
+
+      <div class="rail">
+        <button data-jump="sec-rotation" class="on" aria-label="Rotation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+        <button data-jump="sec-progress" aria-label="Progression"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M3 17l6-6 4 4 7-7"/><path d="M14 8h6v6"/></svg></button>
+        <button data-jump="sec-changes" aria-label="What changed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
+        <button data-jump="sec-diet" aria-label="Diet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M4 11h16a8 8 0 0 1-16 0Z"/><path d="M3 19h18"/><path d="M8 11c0-2.5 1.5-3.5 1.5-5"/></svg></button>
+      </div>
+
+      <div class="card doc" id="sec-rotation">
+        ${cardHead('The rotation')}
         <div class="small muted" style="margin-bottom:10px">Your split, kept as you wrote it. Three things changed: rest days now carry the running, Arms day picked up single-leg work so legs are trained twice per cycle, and every lifting day ends with core.</div>
         ${PROGRAM.map((d, i) => dayCard(d, i, i === todayIdx)).join('')}
       </div>
 
-      <div class="card doc">
-        <h2>How to progress</h2>
+      <div class="card doc" id="sec-progress">
+        ${cardHead('How to progress')}
         <ul>${PROGRESSION.map(p => `<li>${esc(p)}</li>`).join('')}</ul>
       </div>
 
-      <div class="card doc">
-        <h2>What I changed and why</h2>
+      <div class="card doc" id="sec-changes">
+        ${cardHead('What I changed and why')}
         <h3>Legs once per nine days was the problem</h3>
         <p class="small">You asked for leg stability, but the split trained legs once every nine days — about three times a month. Arms day is short, so it now opens with slow step-ups, reverse lunges and single-leg calf raises. Legs get a heavy day and a stability day per cycle without adding a session.</p>
         <h3>Rest days do the running</h3>
@@ -34,8 +43,8 @@ const PlanView = (() => {
         <p class="small">That is normal and it passes in about four weeks. Keep squat weight where it is for the first two cycles rather than fighting it.</p>
       </div>
 
-      <div class="card doc">
-        <h2>Your diet — the fixes</h2>
+      <div class="card doc" id="sec-diet">
+        ${cardHead('Your diet — the fixes')}
         <h3>Read this bit first: you are eating about 1,040 kcal a day</h3>
         <p class="small">Adding your foods up exactly: breakfast 543 kcal, lunch 165, dinner 330 — <b>1,038 kcal, 138 g protein, 18 g fat, 77 g carbs</b>. Your protein estimate was nearly right (138 g, not 130). The calories are the emergency. You need roughly <b>2,700</b>, and you are about to add running on top. Under-eating at this scale does not build muscle, it costs you muscle, strength, sleep and mood. Everything below is really just "how to get from 1,040 to 2,700 without it being all chicken".</p>
 
@@ -88,6 +97,14 @@ const PlanView = (() => {
         <div class="hint">General guidance for a healthy 25-year-old, not medical advice. If something hurts beyond ordinary soreness, or you have a condition that affects diet or exercise, get it looked at properly.</div>
       </div>
     `;
+    root.querySelectorAll('[data-jump]').forEach(b => {
+      b.onclick = () => {
+        root.querySelectorAll('[data-jump]').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        document.getElementById(b.dataset.jump)
+          ?.scrollIntoView({ behavior:'smooth', block:'start' });
+      };
+    });
     root.querySelectorAll('[data-toggle]').forEach(el => {
       el.onclick = () => {
         const body = el.closest('.day').querySelector('.daybody');
