@@ -15,19 +15,34 @@ devices.
 [dash.cloudflare.com/sign-up](https://dash.cloudflare.com/sign-up) — email and
 a password. You do **not** need a domain and you do **not** need to add a card.
 
+> **On a phone the sidebar is hidden** behind the ☰ menu in the top-left. If a
+> step below says "in the sidebar" and you cannot see one, that is why.
+>
+> Cloudflare rearranges this dashboard fairly often, so the direct links under
+> each step are the dependable route — they resolve your account for you.
+
 ## 2. Make the storage
 
-In the dashboard sidebar: **Storage & Databases → KV → Create instance**.
+Direct: **<https://dash.cloudflare.com/?to=/:account/workers/kv/namespaces>**
 
-Name it `bruce-sync`. Create.
+Or in the sidebar: **Storage & Databases → KV**.
+
+**Create instance**, name it `bruce-sync`, create.
 
 ## 3. Make the Worker
 
-Sidebar: **Compute (Workers) → Workers & Pages → Create → Start with Hello
-World → Deploy**.
+Direct: **<https://dash.cloudflare.com/?to=/:account/workers-and-pages>**
 
-Name it something like `bruce-sync`. Deploy the placeholder — you replace the
-code next.
+Or in the sidebar, whichever of these your dashboard shows — it sits just above
+Storage & Databases:
+
+- **Compute (Workers)** → Workers & Pages
+- **Workers & Pages**
+- **Workers**
+
+Then **Create → Start with Hello World → Deploy**. Name it something like
+`bruce-sync`. Deploy the placeholder as-is; you replace the code in the next
+step.
 
 ## 4. Paste in the code
 
