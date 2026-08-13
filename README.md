@@ -254,11 +254,34 @@ tracker's steps are there depends on its companion app: some write to Apple
 Health, some only keep data in their own app. If yours does not, the Shortcut
 still works using your iPhone's own step count, or enter the number by hand.
 
-## Your data
+## Your data, and using it in two places
 
-Everything is in `localStorage` on that one device — nothing is uploaded
-anywhere. Clearing site data wipes it. Export a backup from the Progress tab
-now and then, and before switching phones.
+Everything is in `localStorage` on the device and browser you entered it in.
+There is no account and no server, so **nothing syncs by itself**.
+
+On iOS this bites in a way that looks like a bug but is not: a web app added to
+the Home Screen runs in a **different storage container from Safari**, even at
+the same URL. Log lunch in Safari and it will not appear in the home-screen
+app, and the reverse. A desktop browser is a third separate store again.
+
+Two ways to live with it:
+
+1. **Pick one and stay there.** The home-screen app is the better choice —
+   fullscreen, offline, and the camera scanner works.
+2. **Transfer when you need to.** Progress → Transfer & backup → **Copy my
+   data** in one, **Paste & merge** in the other.
+
+Merging (`js/merge.js`) is built so it cannot lose anything: collections are
+unioned by id, and where two copies disagree on a single value the one already
+on this device wins — the incoming file only fills blanks. A session keeps
+whichever side recorded more completed sets. Merging the same backup twice
+changes nothing. Replacing is still offered, but it is the second option and
+clearly labelled, because it discards whatever is on the device.
+
+Clipboard rather than files is the primary route on purpose: file downloads are
+unreliable inside an iOS home-screen app, which is exactly where half the data
+tends to live. Files still work via *Save as file* / *Load a file* where the
+browser supports them.
 
 ---
 

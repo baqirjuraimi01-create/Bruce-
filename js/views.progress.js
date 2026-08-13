@@ -82,14 +82,22 @@ const ProgressView = (() => {
       </div>
 
       <div class="card">
-        ${cardHead('Data')}
+        ${cardHead('Transfer &amp; backup')}
+        <div class="hint" style="margin-top:-6px">There is no account and no server, so each browser keeps its own log. On an iPhone the home-screen app and Safari are <b>separate stores</b> even at the same address — anything logged in one is invisible to the other. Copy from one, merge into the other.</div>
+        <div class="sp"></div>
         <div class="row wrap" style="gap:8px">
-          <button class="btn ghost grow" data-act="export">Export backup</button>
-          <button class="btn ghost grow" data-act="import">Import backup</button>
+          <button class="btn grow" data-act="copy">Copy my data</button>
+          <button class="btn ghost grow" data-act="paste">Paste &amp; merge</button>
         </div>
         <div class="sp"></div>
+        <div class="row wrap" style="gap:8px">
+          <button class="btn ghost sm grow" data-act="export">Save as file</button>
+          <button class="btn ghost sm grow" data-act="import">Load a file</button>
+        </div>
+        <div class="hint">Merging never deletes: entries from both sides are kept, and anything already here wins a disagreement. Importing the same backup twice changes nothing.</div>
+        <div class="hr"></div>
         <button class="btn danger wide" data-act="wipe">Erase everything</button>
-        <div class="hint">Everything lives in this browser only — nothing is uploaded anywhere. Export now and then, especially before clearing browser data or switching phones.</div>
+        <div class="hint">Erasing cannot be undone. Copy your data first if you are unsure.</div>
       </div>
     `;
     wire(root, date);
@@ -190,6 +198,32 @@ const ProgressView = (() => {
       <button class="btn wide" data-act="saveSettings">Save</button>`;
   }
 
+  /* Merge by default; replacing is offered only as a deliberate choice. */
+  function applyBackup(txt){
+    JSON.parse(txt);              // fail early and loudly on junk
+    openSheet(`
+      <h2>Restore</h2>
+      <div class="hint" style="margin-top:-6px">Merging keeps everything on both sides and is almost always what you want. Replacing throws away what is on this device.</div>
+      <div class="sp"></div>
+      <button class="btn wide" id="mrg">Merge with what is here</button>
+      <div class="sp"></div>
+      <button class="btn ghost wide" id="rep">Replace everything instead</button>
+    `, body => {
+      body.querySelector('#mrg').onclick = () => {
+        try{
+          const stats = Store.mergeJSON(txt);
+          closeSheet(); toast(Merge.summarise(stats), 3200); App.refresh();
+        }catch(e){ toast('That does not look like a backup'); }
+      };
+      body.querySelector('#rep').onclick = () => {
+        try{
+          Store.importJSON(txt);
+          closeSheet(); toast('Replaced with the backup'); App.refresh();
+        }catch(e){ toast('That does not look like a backup'); }
+      };
+    });
+  }
+
   function wire(root, date){
     on(root, 'sub', el => { sub = el.dataset.key; App.refresh(); });
     on(root, 'protInfo', () => toast('Aim for 90%+ of your protein target on most days'));
@@ -231,12 +265,45 @@ const ProgressView = (() => {
       inp.onchange = async () => {
         const file = inp.files[0];
         if(!file) return;
-        try{
-          Store.importJSON(await file.text());
-          toast('Backup restored'); App.refresh();
-        }catch(e){ toast('That file could not be read'); }
+        try{ applyBackup(await file.text()); }
+        catch(e){ toast('That file could not be read'); }
       };
       inp.click();
+    });
+
+    // Downloads are unreliable inside an iOS home-screen app, and that is
+    // exactly where the other half of the data usually lives — so the
+    // clipboard is the path that always works.
+    on(root, 'copy', async () => {
+      const txt = Store.exportJSON();
+      try{
+        await navigator.clipboard.writeText(txt);
+        toast('Copied — now open the other one and tap Paste & merge');
+      }catch(e){
+        openSheet(`
+          <h2>Copy your data</h2>
+          <div class="hint" style="margin-top:-6px">Select all of this and copy it, then paste it into the other one.</div>
+          <div class="sp"></div>
+          <textarea id="outBox" style="min-height:200px;font-size:11px" readonly>${esc(txt)}</textarea>
+        `, body => { const t = body.querySelector('#outBox'); t.focus(); t.select(); });
+      }
+    });
+
+    on(root, 'paste', () => {
+      openSheet(`
+        <h2>Paste &amp; merge</h2>
+        <div class="hint" style="margin-top:-6px">Paste what you copied from the other one. Both sides are kept — nothing here is deleted.</div>
+        <div class="sp"></div>
+        <textarea id="inBox" placeholder="Paste here" style="min-height:170px;font-size:11px"></textarea>
+        <button class="btn wide" id="doMerge">Merge</button>
+      `, body => {
+        body.querySelector('#doMerge').onclick = () => {
+          const txt = body.querySelector('#inBox').value.trim();
+          if(!txt) return toast('Nothing pasted');
+          try{ closeSheet(); applyBackup(txt); }
+          catch(e){ toast('That does not look like a backup'); }
+        };
+      });
     });
 
     on(root, 'wipe', () => {

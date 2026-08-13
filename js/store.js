@@ -356,6 +356,16 @@ const Store = (() => {
     state = Object.assign(blank(), s);
     save();
   }
+
+  /* Combine a backup with what is already here, losing nothing.
+     This is the one to use when both copies hold real logs. */
+  function mergeJSON(txt){
+    const incoming = JSON.parse(txt);
+    const { state: merged, stats } = Merge.mergeState(Object.assign(blank(), state), incoming);
+    state = merged;
+    save();
+    return stats;
+  }
   function reset(){ state = blank(); save(); }
 
   return {
@@ -370,7 +380,7 @@ const Store = (() => {
     setWeight, weightSeries, setSteps, stepsFor, performanceHistory,
     setSwap, swapFor, usualMeal, frequentFoods,
     exercisesFor, isCustom, setRoutine, resetRoutine, dayPlan, dayPlanFor, effectivePlan,
-    exportJSON, importJSON, reset
+    exportJSON, importJSON, mergeJSON, reset
   };
 })();
 

@@ -414,6 +414,61 @@ await check('settings save + recalc', async () => {
   console.log('       80kg -> P 160 g ok');
 });
 
+console.log('— transferring between two browsers —');
+await check('copy produces a backup and merge brings the other side in', async () => {
+  await page.click('[data-tab="progress"]'); await page.waitForTimeout(300);
+
+  // what this "device" has now
+  const mine = await page.evaluate(() => Store.exportJSON());
+  const before = await page.evaluate(() => Store.totalsFor(today()).kcal);
+
+  // a second device with a day this one has never seen, plus an extra
+  // entry on today that this one does not have
+  const other = JSON.parse(mine);
+  const d = await page.evaluate(() => today());
+  other.days['2020-01-01'] = { entries:[{ id:'zz1', name:'Old day food', grams:100,
+                                          kcal:400, p:30, c:20, f:10, meal:'lunch' }],
+                               weight:70, steps:null, note:'' };
+  other.days[d] = other.days[d] || { entries:[], weight:null, steps:null, note:'' };
+  other.days[d].entries = (other.days[d].entries || []).concat([{ id:'zz2', name:'Other device shake',
+    grams:100, kcal:250, p:25, c:18, f:7, meal:'extras' }]);
+
+  await page.evaluate(txt => window.__pending = txt, JSON.stringify(other));
+  await page.click('[data-act="paste"]'); await page.waitForTimeout(300);
+  await page.evaluate(() => { document.querySelector('#inBox').value = window.__pending; });
+  await page.click('#doMerge'); await page.waitForTimeout(300);
+  await page.click('#mrg'); await page.waitForTimeout(400);
+
+  const after = await page.evaluate(() => Store.totalsFor(today()).kcal);
+  if(after !== before + 250) throw new Error(`today went ${before} -> ${after}, expected +250`);
+  const oldDay = await page.evaluate(() => Store.day('2020-01-01').entries.length);
+  if(oldDay !== 1) throw new Error('the other device\'s day did not arrive');
+  console.log('       today ' + before + ' -> ' + after + ' kcal, plus 1 unseen day');
+});
+
+await check('merging the same data twice adds nothing', async () => {
+  const snapshot = await page.evaluate(() => Store.exportJSON());
+  const before = await page.evaluate(() => Store.totalsFor(today()).kcal);
+  await page.evaluate(txt => window.__pending = txt, snapshot);
+  await page.click('[data-act="paste"]'); await page.waitForTimeout(300);
+  await page.evaluate(() => { document.querySelector('#inBox').value = window.__pending; });
+  await page.click('#doMerge'); await page.waitForTimeout(300);
+  await page.click('#mrg'); await page.waitForTimeout(400);
+  const after = await page.evaluate(() => Store.totalsFor(today()).kcal);
+  if(after !== before) throw new Error(`duplicated: ${before} -> ${after}`);
+  console.log('       idempotent — still ' + after + ' kcal');
+});
+
+await check('replace is still available but is not the default', async () => {
+  await page.click('[data-act="paste"]'); await page.waitForTimeout(300);
+  await page.evaluate(() => { document.querySelector('#inBox').value = '{"days":{}}'; });
+  await page.click('#doMerge'); await page.waitForTimeout(300);
+  const buttons = await page.$$eval('.sheet button', b => b.map(x => x.textContent.trim()));
+  if(!/Merge/.test(buttons[0])) throw new Error('merge is not the first option: ' + buttons.join(' | '));
+  if(!buttons.some(b => /Replace/.test(b))) throw new Error('no replace option');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+});
+
 console.log('— plan tab —');
 await check('plan renders all 9 days', async () => {
   await page.click('[data-tab="plan"]');
