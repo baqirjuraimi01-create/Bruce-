@@ -6,7 +6,7 @@ const CACHE = 'bruce-v1';
 const SHELL = [
   './', './index.html', './css/styles.css', './manifest.webmanifest',
   './js/data.js', './js/store.js', './js/nutrition.js', './js/scanner.js',
-  './js/progression.js', './js/ui.js', './js/views.food.js', './js/views.train.js',
+  './js/progression.js', './js/ui.js', './js/views.home.js', './js/views.food.js', './js/views.train.js',
   './js/views.cardio.js', './js/views.progress.js', './js/views.plan.js',
   './js/app.js'
 ];

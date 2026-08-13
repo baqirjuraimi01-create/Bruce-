@@ -3,11 +3,11 @@
 ------------------------------------------------------------------- */
 
 const App = (() => {
-  let tab = 'food';
+  let tab = 'home';
   let date = today();
 
   const VIEWS = {
-    food: FoodView, train: TrainView, cardio: CardioView,
+    home: HomeView, food: FoodView, train: TrainView, cardio: CardioView,
     progress: ProgressView, plan: PlanView
   };
 
@@ -39,6 +39,20 @@ const App = (() => {
 
   function setDate(d){ date = d; refresh(); }
 
+  /* An iOS Shortcut (or any link) can push a step count in:
+       .../index.html?steps=8432&date=2026-08-13
+     The parameter is consumed and stripped so a refresh cannot double-import. */
+  function importFromUrl(){
+    const q = new URLSearchParams(location.search);
+    if(!q.has('steps')) return null;
+    const n = parseInt(q.get('steps'), 10);
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(q.get('date') || '') ? q.get('date') : today();
+    history.replaceState({}, '', location.pathname + location.hash);
+    if(!isFinite(n) || n < 0) return null;
+    Store.setSteps(d, n);
+    return { n, d };
+  }
+
   function boot(){
     document.querySelectorAll('.tab').forEach(b => b.onclick = () => go(b.dataset.tab));
     document.getElementById('prevDay').onclick = () => setDate(addDays(date, -1));
@@ -48,11 +62,14 @@ const App = (() => {
     Scanner.wire();
     wireSheet();
 
+    const imported = importFromUrl();
+
     if('serviceWorker' in navigator && location.protocol.startsWith('http')){
       navigator.serviceWorker.register('sw.js').catch(() => {});
     }
 
     refresh();
+    if(imported) toast(imported.n.toLocaleString() + ' steps imported');
   }
 
   return { boot, refresh, go, get date(){ return date; } };

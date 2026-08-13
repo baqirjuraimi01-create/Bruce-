@@ -183,6 +183,8 @@ const ProgressView = (() => {
         </div>`}
       <div class="sp"></div>
       <label class="f"><span><input type="checkbox" id="prest"${Store.state.settings.restTimer?' checked':''}> Start the rest timer when I tick a set</span></label>
+      <label class="f"><span>Daily step goal</span>
+        <input type="number" id="pstep" value="${Store.state.settings.stepGoal || 10000}"></label>
       <label class="f"><span>USDA FoodData Central API key (optional — sharper data for raw foods)</span>
         <input type="text" id="pusda" value="${esc(Store.state.settings.usdaKey||'')}" placeholder="free from fdc.nal.usda.gov"></label>
       <button class="btn wide" data-act="saveSettings">Save</button>`;
@@ -210,6 +212,7 @@ const ProgressView = (() => {
       }
       Store.state.settings.restTimer = root.querySelector('#prest').checked;
       Store.state.settings.usdaKey = root.querySelector('#pusda').value.trim();
+      Store.state.settings.stepGoal = parseInt(root.querySelector('#pstep').value) || 10000;
       Store.save(); toast('Saved'); App.refresh();
     });
 

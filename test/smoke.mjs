@@ -20,8 +20,31 @@ await check('header shows cycle day', async () => {
   if(!/Today/.test(t)) throw new Error('got ' + t);
 });
 
+console.log('— home tab —');
+await check('lands on Home with objectives', async () => {
+  const t = await page.textContent('#view');
+  if(!/Objectives/.test(t)) throw new Error('no objectives card');
+  const n = await page.$$eval('.obj', e => e.length);
+  if(n !== 5) throw new Error('expected 5 objectives, got ' + n);
+  console.log('       ' + (await page.$$eval('.obj .t', e => e.map(x => x.textContent.trim()))).join(', '));
+});
+await check('home shows today\'s session and first-lift prescription', async () => {
+  const t = await page.textContent('#view');
+  if(!/Push/.test(t)) throw new Error('session name missing');
+  if(!/Barbell Bench Press/.test(t)) throw new Error('next-up prescription missing');
+});
+await check('manual step entry', async () => {
+  await page.click('[data-act="steps"]');
+  await page.fill('#stIn', '8432');
+  await page.click('#save');
+  await page.waitForTimeout(300);
+  if(!/8,432/.test(await page.textContent('#view'))) throw new Error('steps not shown');
+});
+
 console.log('— food tab —');
 await check('preset meal logs items', async () => {
+  await page.click('[data-tab="food"]');
+  await page.waitForTimeout(200);
   await page.click('[data-act="preset"][data-i="0"]');
   await page.waitForTimeout(150);
   const txt = await page.textContent('#view');
@@ -217,8 +240,44 @@ console.log('— persistence —');
 await check('data survives reload', async () => {
   await page.reload({ waitUntil:'networkidle' });
   await page.waitForTimeout(300);
+  // The app reopens on Home, so go back to Food to see the entries.
+  await page.click('[data-tab="food"]');
+  await page.waitForTimeout(250);
   const t = await page.textContent('#view');
   if(!/Test Bar/.test(t)) throw new Error('log lost on reload');
+});
+
+console.log('— Shortcuts step import via URL —');
+await check('?steps= imports and is stripped from the URL', async () => {
+  await page.goto(`http://localhost:${process.env.PORT || 8765}/index.html?steps=11750`, { waitUntil:'networkidle' });
+  await page.waitForTimeout(400);
+  if(!/11,750/.test(await page.textContent('#view'))) throw new Error('steps not imported');
+  if(/steps=/.test(page.url())) throw new Error('query string not stripped: ' + page.url());
+  console.log('       imported 11,750 and cleaned the URL');
+});
+await check('a refresh does not re-import', async () => {
+  await page.reload({ waitUntil:'networkidle' });
+  await page.waitForTimeout(300);
+  if(!/11,750/.test(await page.textContent('#view'))) throw new Error('value lost on reload');
+});
+await check('?date= targets a specific day', async () => {
+  const past = await page.evaluate(() => {
+    const d = new Date(); d.setDate(d.getDate()-2);
+    return d.toISOString().slice(0,10);
+  });
+  await page.goto(`http://localhost:${process.env.PORT || 8765}/index.html?steps=6100&date=${past}`, { waitUntil:'networkidle' });
+  await page.waitForTimeout(400);
+  const stored = await page.evaluate(d => Store.stepsFor(d), past);
+  if(stored !== 6100) throw new Error('stored ' + stored + ' for ' + past);
+  const todayVal = await page.evaluate(() => Store.stepsFor(today()));
+  if(todayVal !== 11750) throw new Error("today's count was overwritten: " + todayVal);
+  console.log('       back-dated 6,100 without touching today');
+});
+await check('garbage input is ignored, not stored', async () => {
+  await page.goto(`http://localhost:${process.env.PORT || 8765}/index.html?steps=notanumber`, { waitUntil:'networkidle' });
+  await page.waitForTimeout(300);
+  const v = await page.evaluate(() => Store.stepsFor(today()));
+  if(v !== 11750) throw new Error('bad value clobbered the real one: ' + v);
 });
 
 console.log('— barcode lookup (Open Food Facts, intercepted fixtures) —');

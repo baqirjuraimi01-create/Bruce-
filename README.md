@@ -21,6 +21,14 @@ Pages gives you that).
 
 ## What's in it
 
+**Home** — what to do today (session name, first lift's prescription, scheduled
+run), today's calorie / protein / step numbers, and an **Objectives** panel that
+scores the four goals this app was built around: strength & muscle (main lifts
+that beat their last top set), running (minutes vs what the rotation asks for
+across 7 days), core strength and leg stability (tagged sets completed vs
+prescribed so far this cycle), plus protein adherence. Everything is derived
+from what you already log — no extra tracking.
+
 **Food** — daily calories and macros against your targets, split by meal.
 Log food by scanning a barcode, searching, or tapping one of your four preset
 meals. Bodyweight goes in here too.
@@ -108,6 +116,42 @@ persistence across reload, progression carrying across a full 9-day cycle, and
 barcode parsing against Open Food Facts response fixtures (including kJ-only
 products, missing nutrition data and unknown barcodes). Set `CHROME_PATH` to
 use a pre-installed Chromium.
+
+## Steps and your fitness tracker
+
+Steps can be entered by hand on Home or the Cardio tab, and the daily goal is
+set in Progress → Targets.
+
+They can also be pushed in by URL, which is what makes automation possible:
+
+```
+https://<your-site>/index.html?steps=8432
+https://<your-site>/index.html?steps=8432&date=2026-08-13
+```
+
+The value is saved, then the query string is stripped from the address bar so a
+refresh cannot double-import. A missing or malformed `date` falls back to
+today; a non-numeric `steps` is ignored rather than stored.
+
+### iOS Shortcut
+
+1. Shortcuts app → **+** → **Add Action** → *Find Health Samples where* →
+   Type = **Steps**, sort by Start Date, and set the date range to **Today**
+2. Add *Calculate Statistics* → **Sum** over the Health Samples
+3. Add *Text* → `https://<your-site>/index.html?steps=` then insert the
+   Statistics result
+4. Add *Open URLs* with that text
+5. Optionally: Automation tab → daily at 22:00 → run this Shortcut, and turn
+   off *Ask Before Running*
+
+### What will and will not connect
+
+A web app cannot talk to a Bluetooth tracker on iOS — Safari has no Web
+Bluetooth — and it cannot read Apple Health, which is native-only. So the
+Shortcut above reads whatever is *already in Apple Health*. Whether your
+tracker's steps are there depends on its companion app: some write to Apple
+Health, some only keep data in their own app. If yours does not, the Shortcut
+still works using your iPhone's own step count, or enter the number by hand.
 
 ## Your data
 

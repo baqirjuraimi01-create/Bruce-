@@ -11,8 +11,8 @@ const Store = (() => {
   function blank(){
     return {
       profile: JSON.parse(JSON.stringify(DEFAULT_PROFILE)),
-      settings: { cycleStart: today(), restTimer:true, usdaKey:'' },
-      days: {},          // 'YYYY-MM-DD' -> { entries:[], weight:null, note:'' }
+      settings: { cycleStart: today(), restTimer:true, usdaKey:'', stepGoal:10000 },
+      days: {},          // 'YYYY-MM-DD' -> { entries:[], weight:null, steps:null, note:'' }
       sessions: {},      // 'YYYY-MM-DD' -> { dayKey, exercises:{name:[{w,r,done}]}, note, done }
       cardio: {},        // 'YYYY-MM-DD' -> [{mode,minutes,km,note}]
       customFoods: [],   // foods saved from barcode scans / manual entry
@@ -41,7 +41,7 @@ const Store = (() => {
 
   /* ---------- day records ---------- */
   function day(d){
-    if(!state.days[d]) state.days[d] = { entries:[], weight:null, note:'' };
+    if(!state.days[d]) state.days[d] = { entries:[], weight:null, steps:null, note:'' };
     return state.days[d];
   }
   function session(d){
@@ -194,6 +194,27 @@ const Store = (() => {
     save();
   }
 
+  /* ---------- steps ---------- */
+  function setSteps(dstr, n){
+    day(dstr).steps = n > 0 ? Math.round(n) : null;
+    save();
+  }
+  function stepsFor(dstr){ return day(dstr).steps || 0; }
+
+  /* The last n sessions for one exercise, newest first. */
+  function performanceHistory(exName, beforeDate, n = 2){
+    const out = [];
+    const dates = Object.keys(state.sessions).filter(d => d <= beforeDate).sort().reverse();
+    for(const d of dates){
+      const sets = state.sessions[d].exercises[exName];
+      if(sets && sets.some(s => s.done && (s.w || s.r))){
+        out.push({ date:d, sets: sets.filter(s => s.done) });
+        if(out.length >= n) break;
+      }
+    }
+    return out;
+  }
+
   /* ---------- bodyweight ---------- */
   function setWeight(dstr, kg){
     day(dstr).weight = kg;
@@ -226,7 +247,7 @@ const Store = (() => {
     saveFood, foodByBarcode, allFoods, recentFoods,
     setLog, lastPerformance, sessionVolume,
     addCardio, removeCardio,
-    setWeight, weightSeries,
+    setWeight, weightSeries, setSteps, stepsFor, performanceHistory,
     exportJSON, importJSON, reset
   };
 })();

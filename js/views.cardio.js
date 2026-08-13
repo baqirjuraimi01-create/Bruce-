@@ -38,6 +38,16 @@ const CardioView = (() => {
       </div>
 
       <div class="card">
+        ${cardHead('Steps')}
+        <div class="row" style="gap:8px">
+          <input type="number" id="stepIn" inputmode="numeric" placeholder="${Store.state.settings.stepGoal}" value="${Store.stepsFor(date) || ''}">
+          <button class="btn" data-act="saveSteps">Save</button>
+        </div>
+        ${bar(Store.stepsFor(date), Store.state.settings.stepGoal, 'var(--lime)')}
+        <div class="hint">From your Tempo 5C or your phone. See the README for the iOS Shortcut that fills this in for you.</div>
+      </div>
+
+      <div class="card">
         ${cardHead('Today')}
         ${items.length ? items.map(row).join('') : `<div class="empty">Nothing logged</div>`}
       </div>
@@ -112,6 +122,10 @@ const CardioView = (() => {
         note: root.querySelector('#noteIn').value.trim()
       });
       toast('Logged'); App.refresh();
+    });
+    on(root, 'saveSteps', () => {
+      Store.setSteps(date, parseFloat(root.querySelector('#stepIn').value) || 0);
+      toast('Steps saved'); App.refresh();
     });
     on(root, 'del', el => { Store.removeCardio(date, el.dataset.id); App.refresh(); });
   }
