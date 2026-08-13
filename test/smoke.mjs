@@ -301,16 +301,83 @@ await check('rotation advances to Pull tomorrow', async () => {
   await page.waitForTimeout(150);
 });
 
-console.log('— cardio tab —');
-await check('cardio logs a run', async () => {
-  await page.click('[data-tab="cardio"]');
+console.log('— cardio, now inside Train —');
+await check('cardio is reachable from the Train tab', async () => {
+  await page.click('[data-tab="train"]');
   await page.waitForTimeout(200);
+  if(await page.$('[data-tab="cardio"]')) throw new Error('cardio tab still present');
+  await page.locator('.seg button', { hasText:'Cardio' }).click();
+  await page.waitForTimeout(300);
   await page.fill('#minIn','30'); await page.fill('#kmIn','5');
   await page.click('[data-act="add"]');
   await page.waitForTimeout(200);
   const t = await page.textContent('#view');
   if(!/6:00 \/km/.test(t)) throw new Error('pace wrong: ' + (t.match(/[\d:]+ \/km/)||['none'])[0]);
   console.log('       pace calc ok (30min / 5km = 6:00/km)');
+});
+
+await check('the Session segment still works after visiting Cardio', async () => {
+  await page.locator('.seg button', { hasText:'Session' }).click();
+  await page.waitForTimeout(300);
+  if(!/Barbell Bench Press/.test(await page.textContent('#view'))) throw new Error('session lost');
+});
+
+console.log('— custom routines —');
+await check('editing a day replaces its exercises', async () => {
+  await page.click('[data-tab="plan"]'); await page.waitForTimeout(300);
+  await page.locator('[data-edit="push"]').click();
+  await page.waitForTimeout(300);
+  const before = await page.$$eval('.exrow', e => e.length);
+  if(before < 4) throw new Error('editor did not load the routine');
+
+  // strip it back to the four exercises the user described
+  for(let i = before - 1; i >= 0; i--){
+    await page.locator('.exrow').nth(i).locator('[data-act="rm"]').click();
+    await page.waitForTimeout(80);
+  }
+  for(const [name, sets] of [['Flat press',4],['Incline presses',3],['Cable bicep curls',3],['Dips',3]]){
+    await page.click('[data-act="add"]'); await page.waitForTimeout(200);
+    await page.fill('#exName', name);
+    await page.fill('#exSets', String(sets));
+    await page.click('#exSave'); await page.waitForTimeout(200);
+  }
+  const rows = await page.$$eval('.exrow .t', e => e.map(x => x.textContent.trim()));
+  console.log('       routine: ' + rows.join(', '));
+  if(rows.length !== 4) throw new Error('expected 4, got ' + rows.length);
+});
+
+await check('the editor suggests what the routine is missing', async () => {
+  const sugg = await page.$$eval('.sugg', e => e.map(x => x.textContent.replace(/\s+/g,' ').trim()));
+  if(!sugg.length) throw new Error('no suggestions offered');
+  console.log('       ' + sugg.join(' | '));
+  if(!/Lateral Raise/.test(sugg.join(' '))) throw new Error('missed the side-delt gap');
+});
+
+await check('accepting a suggestion adds it', async () => {
+  await page.locator('[data-act="accept"]').first().click();
+  await page.waitForTimeout(300);
+  const rows = await page.$$eval('.exrow .t', e => e.map(x => x.textContent.trim()));
+  if(rows.length !== 5) throw new Error('expected 5 after accepting, got ' + rows.length);
+  if(!/Lateral Raise/.test(rows.join(' '))) throw new Error('suggestion not added');
+});
+
+await check('saving the routine drives the Train tab', async () => {
+  await page.click('[data-act="save"]');
+  await page.waitForTimeout(300);
+  await page.click('[data-tab="train"]'); await page.waitForTimeout(400);
+  const names = await page.$$eval('.ex .n', e => e.map(x => x.textContent.trim().split(' ')[0]));
+  const txt = await page.textContent('#view');
+  if(!/Flat press/.test(txt)) throw new Error('custom routine not used: ' + names.join(', '));
+  if(/Ab Wheel/.test(txt)) throw new Error('built-in exercises still showing');
+  console.log('       Train now shows the custom routine');
+});
+
+await check('resetting restores the built-in plan', async () => {
+  await page.click('[data-tab="plan"]'); await page.waitForTimeout(300);
+  await page.locator('[data-edit="push"]').click(); await page.waitForTimeout(300);
+  await page.click('[data-act="reset"]'); await page.waitForTimeout(300);
+  await page.click('[data-tab="train"]'); await page.waitForTimeout(400);
+  if(!/Barbell Bench Press/.test(await page.textContent('#view'))) throw new Error('reset did not restore');
 });
 
 console.log('— progress tab —');

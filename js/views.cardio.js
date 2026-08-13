@@ -3,15 +3,14 @@
    so mileage climbs at a sane rate.
 ------------------------------------------------------------------- */
 
-const CardioView = (() => {
+const CardioPanel = (() => {
 
-  function render(root, date){
-    const day = Store.cycleDayFor(date);
+  function render(date){
+    const day = Store.dayPlanFor(date);
     const items = Store.cardioFor(date);
     const wk = weekTotals(date);
 
-    root.innerHTML = `
-      <h1 class="page-h">Cardio<small>${esc(prettyDate(date))} · ${esc(day.name)}</small></h1>
+    return `
       ${day.cardio ? `
         <div class="card">
           ${cardHead('Scheduled today')}
@@ -64,7 +63,6 @@ const CardioView = (() => {
         <div class="hint">${loadAdvice(wk)}</div>
       </div>
     `;
-    wire(root, date);
   }
 
   function row(c){
@@ -130,5 +128,5 @@ const CardioView = (() => {
     on(root, 'del', el => { Store.removeCardio(date, el.dataset.id); App.refresh(); });
   }
 
-  return { render };
+  return { render, wire };
 })();

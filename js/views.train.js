@@ -7,17 +7,26 @@
 const TrainView = (() => {
 
   let timerId = 0, timerLeft = 0;
+  let sub = null;          // 'session' | 'cardio'; null = pick from the day
 
   function render(root, date){
-    const day = Store.cycleDayFor(date);
+    const day = Store.dayPlanFor(date);
     const cycleNo = Store.cycleNumberFor(date);
     const sess = Store.session(date);
 
     // If the rotation shifted since this session was created, follow the rotation.
     if(sess.dayKey !== day.key && Object.keys(sess.exercises).length === 0) sess.dayKey = day.key;
 
+    // Cardio days open on cardio, lifting days on the session.
+    const view = sub || (day.type === 'cardio' ? 'cardio' : 'session');
+    const cardioCount = Store.cardioFor(date).length;
+
     let html = `
       <h1 class="page-h">${esc(day.name)}<small>Cycle ${cycleNo} · day ${Store.cycleIndexFor(date)+1} of ${PROGRAM.length}</small></h1>
+      ${seg([
+        { key:'session', label:'Session', count:(day.exercises||[]).length || undefined },
+        { key:'cardio',  label:'Cardio',  count:cardioCount || undefined }
+      ], view, 'sub')}
 
       <div class="card">
         <div class="cardhead">
@@ -34,6 +43,13 @@ const TrainView = (() => {
         ${day.note ? `<div class="hint">${esc(day.note)}</div>` : ''}
         ${day.cardio ? cardioCard(day) : ''}
       </div>`;
+
+    if(view === 'cardio'){
+      root.innerHTML = html + CardioPanel.render(date);
+      wire(root, date);
+      CardioPanel.wire(root, date);
+      return;
+    }
 
     if(day.type === 'rest' && !day.exercises){
       html += `<div class="card"><h2>Rest</h2><div class="small">${esc(day.note || 'Nothing scheduled.')}</div></div>`;
@@ -62,7 +78,7 @@ const TrainView = (() => {
   function cardioCard(day){
     return `<div class="hint" style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px">
       <b>${day.cardio.mode === 'run' ? 'Run' : 'Walk'}: ${esc(day.cardio.minutes)} min.</b> ${esc(day.cardio.effort)}
-      <br>Log it on the Cardio tab.</div>`;
+      <br>Log it under Cardio above.</div>`;
   }
 
   function exerciseCard(ex, eff, date, sess){
@@ -180,6 +196,7 @@ const TrainView = (() => {
       App.refresh();
     });
     on(root, 'shift', () => openShift(date));
+    on(root, 'sub', el => { sub = el.dataset.key; App.refresh(); });
   }
 
   /* Equipment busy? Swap to something that trains the same pattern.

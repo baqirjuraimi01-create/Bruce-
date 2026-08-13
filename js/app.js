@@ -7,7 +7,7 @@ const App = (() => {
   let date = today();
 
   const VIEWS = {
-    home: HomeView, food: FoodView, train: TrainView, cardio: CardioView,
+    home: HomeView, food: FoodView, train: TrainView,
     progress: ProgressView, plan: PlanView
   };
 
@@ -30,6 +30,7 @@ const App = (() => {
   }
 
   function go(t){
+    if(t === 'cardio') t = 'train';        // cardio now lives inside Train
     tab = t;
     document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
     TrainView.stopTimer();

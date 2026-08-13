@@ -9,14 +9,15 @@
 
 const HomeView = (() => {
 
-  /* name -> tag, so logged sets can be attributed to core / stability */
-  const TAG = (() => {
+  /* name -> tag, so logged sets can be attributed to core / stability.
+     Built from the effective routine, so custom exercises count too. */
+  function tagMap(){
     const m = {};
-    for(const d of PROGRAM)
+    for(const d of Store.effectivePlan())
       for(const ex of (d.exercises || []))
         if(ex.tag) m[ex.name] = ex.tag;
     return m;
-  })();
+  }
 
   /* Cardio minutes the rotation asks for, expressed per week. */
   const WEEKLY_CARDIO = (() => {
@@ -33,7 +34,7 @@ const HomeView = (() => {
                       'Romanian Deadlift','Standing Overhead Press','Bulgarian Split Squat'];
 
   function render(root, date){
-    const day = Store.cycleDayFor(date);
+    const day = Store.dayPlanFor(date);
     const tgt = Store.targets();
     const tot = Store.totalsFor(date);
     const o = objectives(date);
@@ -89,7 +90,7 @@ const HomeView = (() => {
 
   /* The single most useful line on a lifting day: the first main lift's prescription. */
   function nextUp(date){
-    const day = Store.cycleDayFor(date);
+    const day = Store.dayPlanFor(date);
     if(day.type !== 'lift' || !(day.exercises||[]).length) return '';
     const first = day.exercises[0];
     const nt = Progression.nextTarget(first, date);
@@ -129,15 +130,16 @@ const HomeView = (() => {
       for(const c of (Store.state.cardio[addDays(date, -i)] || [])) mins += +c.minutes || 0;
 
     /* 3 & 4. core and stability sets done vs prescribed so far this cycle */
+    const TAGS = tagMap();
     const done = { core:0, stab:0 }, planned = { core:0, stab:0 };
     for(let i = 0; i < elapsed; i++){
       const d = addDays(start, i);
-      for(const ex of (PROGRAM[Store.cycleIndexFor(d)].exercises || []))
+      for(const ex of (Store.dayPlanFor(d).exercises || []))
         if(ex.tag) planned[ex.tag] += ex.sets;
       const sess = Store.state.sessions[d];
       if(!sess) continue;
       for(const name in sess.exercises){
-        const tag = TAG[name];
+        const tag = TAGS[name];
         if(!tag) continue;
         done[tag] += sess.exercises[name].filter(s => s.done).length;
       }
@@ -155,8 +157,9 @@ const HomeView = (() => {
 
     // Which cycle day does this tag first appear on? Used when nothing is due yet.
     const startsOn = tag => {
-      const i = PROGRAM.findIndex(d => (d.exercises || []).some(e => e.tag === tag));
-      return i < 0 ? null : { day:i + 1, name:PROGRAM[i].name };
+      const plan = Store.effectivePlan();
+      const i = plan.findIndex(d => (d.exercises || []).some(e => e.tag === tag));
+      return i < 0 ? null : { day:i + 1, name:plan[i].name };
     };
     const tagObj = (tag, label, color, note) => {
       if(planned[tag] === 0){
@@ -194,7 +197,7 @@ const HomeView = (() => {
   function wire(root, date){
     on(root, 'goTrain',    () => App.go('train'));
     on(root, 'goFood',     () => App.go('food'));
-    on(root, 'goCardio',   () => App.go('cardio'));
+    on(root, 'goCardio',   () => App.go('train'));
     on(root, 'goProgress', () => App.go('progress'));
     on(root, 'steps',      () => openSteps(date));
   }

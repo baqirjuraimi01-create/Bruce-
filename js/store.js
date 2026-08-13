@@ -16,6 +16,7 @@ const Store = (() => {
       sessions: {},      // 'YYYY-MM-DD' -> { dayKey, exercises:{name:[{w,r,done}]}, note, done }
       cardio: {},        // 'YYYY-MM-DD' -> [{mode,minutes,km,note}]
       customFoods: [],   // foods saved from barcode scans / manual entry
+      routines: {},      // dayKey -> [exercise] — overrides the built-in program
       version: 1
     };
   }
@@ -270,6 +271,38 @@ const Store = (() => {
       .slice(0, n);
   }
 
+  /* ---------- custom routines ----------
+     A routine saved against a cycle day replaces the built-in one for
+     that day, every cycle, until it is reset. */
+  function exercisesFor(dayKey){
+    const custom = state.routines[dayKey];
+    if(custom && custom.length) return custom;
+    const day = PROGRAM.find(d => d.key === dayKey);
+    return (day && day.exercises) || [];
+  }
+  function isCustom(dayKey){
+    return !!(state.routines[dayKey] && state.routines[dayKey].length);
+  }
+  function setRoutine(dayKey, exercises){
+    if(!exercises || !exercises.length) delete state.routines[dayKey];
+    else state.routines[dayKey] = exercises;
+    save();
+  }
+  function resetRoutine(dayKey){ delete state.routines[dayKey]; save(); }
+
+  /* The programmed day with the effective exercise list swapped in. */
+  function dayPlan(dayKey){
+    const day = PROGRAM.find(d => d.key === dayKey);
+    return Object.assign({}, day, { exercises: exercisesFor(dayKey), custom: isCustom(dayKey) });
+  }
+  function dayPlanFor(dstr){ return dayPlan(cycleDayFor(dstr).key); }
+
+  /* The whole rotation as it currently stands — what the volume
+     analysis reads. */
+  function effectivePlan(){
+    return PROGRAM.map(d => dayPlan(d.key));
+  }
+
   /* ---------- exercise swaps ---------- */
   // Machine busy? Log the session against a different exercise for today
   // only. The replacement keeps its own weight history.
@@ -336,6 +369,7 @@ const Store = (() => {
     addCardio, removeCardio,
     setWeight, weightSeries, setSteps, stepsFor, performanceHistory,
     setSwap, swapFor, usualMeal, frequentFoods,
+    exercisesFor, isCustom, setRoutine, resetRoutine, dayPlan, dayPlanFor, effectivePlan,
     exportJSON, importJSON, reset
   };
 })();

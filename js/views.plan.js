@@ -20,7 +20,8 @@ const PlanView = (() => {
 
       <div class="card doc" id="sec-rotation">
         ${cardHead('The rotation')}
-        <div class="small muted" style="margin-bottom:10px">Your split, kept as you wrote it. Three things changed: rest days now carry the running, Arms day picked up single-leg work so legs are trained twice per cycle, and every lifting day ends with core.</div>
+        <div class="small muted" style="margin-bottom:10px">Your split. Tap <b>Edit</b> on any day to set your own exercises — the app checks your weekly volume and tells you what is missing.</div>
+        ${volumeCard()}
         ${PROGRAM.map((d, i) => dayCard(d, i, i === todayIdx)).join('')}
       </div>
 
@@ -97,6 +98,9 @@ const PlanView = (() => {
         <div class="hint">General guidance for a healthy 25-year-old, not medical advice. If something hurts beyond ordinary soreness, or you have a condition that affects diet or exercise, get it looked at properly.</div>
       </div>
     `;
+    root.querySelectorAll('[data-edit]').forEach(b => {
+      b.onclick = () => openEditor(b.dataset.edit);
+    });
     root.querySelectorAll('[data-jump]').forEach(b => {
       b.onclick = () => {
         root.querySelectorAll('[data-jump]').forEach(x => x.classList.remove('on'));
@@ -114,17 +118,209 @@ const PlanView = (() => {
     });
   }
 
+  /* ---------------- routine editor ----------------
+     Working copy lives here until Save, so backing out changes nothing. */
+  let draft = null, draftKey = null;
+
+  function openEditor(dayKey){
+    draftKey = dayKey;
+    draft = JSON.parse(JSON.stringify(Store.exercisesFor(dayKey)));
+    paintEditor();
+  }
+
+  function paintEditor(){
+    const day = PROGRAM.find(d => d.key === draftKey);
+
+    // Volume as it would be if this draft were saved.
+    const plan = Store.effectivePlan().map(d =>
+      d.key === draftKey ? Object.assign({}, d, { exercises:draft }) : d);
+    const perWeek = Volume.weeklySets(plan);
+    const suggestions = Volume.suggestFor(draft, perWeek, day.exercises, 2);
+    const mine = Volume.daySets(draft);
+
+    const rows = draft.map((ex, i) => `
+      <div class="exrow" data-i="${i}">
+        <div class="grow">
+          <div class="t">${esc(ex.name)}</div>
+          <div class="s">${ex.sets} × ${esc(ex.reps)}${ex.rest ? ` · ${ex.rest}s` : ''}${
+            musclesOf(ex.name) ? ' · ' + esc(musclesOf(ex.name)) : ''}</div>
+        </div>
+        <button class="x" data-act="up"   ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+        <button class="x" data-act="down" ${i === draft.length-1 ? 'disabled' : ''} aria-label="Move down">↓</button>
+        <button class="x" data-act="edit" aria-label="Edit">&#9998;</button>
+        <button class="x" data-act="rm"   aria-label="Remove">&#10005;</button>
+      </div>`).join('');
+
+    openSheet(`
+      <h2>${esc(day.name)}</h2>
+      <div class="hint" style="margin-top:-6px">Your routine for this day, every cycle. ${
+        Store.isCustom(draftKey) ? 'Currently customised.' : 'Currently the built-in plan.'}</div>
+      <div class="sp"></div>
+      ${rows || `<div class="empty">No exercises yet — add one below.</div>`}
+
+      <div class="row" style="gap:8px;margin-top:12px">
+        <button class="btn ghost grow" data-act="add">+ Add exercise</button>
+      </div>
+
+      ${suggestions.length ? `
+        <div class="hr"></div>
+        <h3 style="margin:0 0 4px;font-size:14px">Suggested additions</h3>
+        <div class="hint" style="margin-top:0">Based on weekly sets across your whole rotation.</div>
+        ${suggestions.map((s, i) => `
+          <div class="sugg" data-s="${i}">
+            <div class="grow">
+              <div class="t">${esc(s.exercise.name)}</div>
+              <div class="s">${esc(s.label)} at ${s.have} sets/week — ${s.target} is the minimum</div>
+            </div>
+            <button class="btn sm" data-act="accept" data-s="${i}">Add</button>
+          </div>`).join('')}
+      ` : `<div class="hint" style="margin-top:14px">Volume looks covered for this day.</div>`}
+
+      <div class="hr"></div>
+      <h3 style="margin:0 0 8px;font-size:14px">This day trains</h3>
+      <div class="chips">
+        ${Object.keys(mine).sort((a,b) => mine[b]-mine[a]).map(m =>
+          `<span class="chip flat">${esc(Volume.LABELS[m] || m)} ${round(mine[m],1)}</span>`).join('')
+          || '<span class="chip flat">nothing yet</span>'}
+      </div>
+
+      <div class="hr"></div>
+      <div class="row" style="gap:8px">
+        <button class="btn ghost" data-act="cancel">Cancel</button>
+        ${Store.isCustom(draftKey) ? `<button class="btn ghost" data-act="reset">Reset</button>` : ''}
+        <button class="btn grow" data-act="save">Save routine</button>
+      </div>
+    `, body => {
+      body.querySelectorAll('.exrow').forEach(row => {
+        const i = +row.dataset.i;
+        row.querySelector('[data-act="up"]').onclick   = () => { move(i, -1); };
+        row.querySelector('[data-act="down"]').onclick = () => { move(i, 1); };
+        row.querySelector('[data-act="rm"]').onclick   = () => { draft.splice(i, 1); paintEditor(); };
+        row.querySelector('[data-act="edit"]').onclick = () => openExerciseForm(i);
+      });
+      body.querySelectorAll('[data-act="accept"]').forEach(b => b.onclick = () => {
+        draft.push(Object.assign({}, suggestions[+b.dataset.s].exercise));
+        paintEditor();
+      });
+      body.querySelector('[data-act="add"]').onclick    = () => openExerciseForm(-1);
+      body.querySelector('[data-act="cancel"]').onclick = closeSheet;
+      body.querySelector('[data-act="reset"]')?.addEventListener('click', () => {
+        Store.resetRoutine(draftKey); closeSheet(); toast('Back to the built-in plan'); App.refresh();
+      });
+      body.querySelector('[data-act="save"]').onclick = () => {
+        Store.setRoutine(draftKey, draft);
+        closeSheet(); toast('Routine saved'); App.refresh();
+      };
+    });
+  }
+
+  function move(i, d){
+    const j = i + d;
+    if(j < 0 || j >= draft.length) return;
+    [draft[i], draft[j]] = [draft[j], draft[i]];
+    paintEditor();
+  }
+
+  function musclesOf(name){
+    const p = Volume.muscleProfile(name);
+    return Object.keys(p).filter(m => p[m] >= 0.5)
+      .map(m => Volume.LABELS[m] || m).join(', ');
+  }
+
+  /* index -1 adds a new one */
+  function openExerciseForm(index){
+    const ex = index >= 0 ? draft[index] : { name:'', sets:3, reps:'8-12', rest:90 };
+    const names = [...new Set(
+      PROGRAM.flatMap(d => (d.exercises || []).map(e => e.name))
+        .concat(Object.keys(ALTERNATIVES))
+        .concat(Object.values(ALTERNATIVES).flat())
+    )].sort();
+
+    openSheet(`
+      <h2>${index >= 0 ? 'Edit exercise' : 'Add exercise'}</h2>
+      <label class="f"><span>Name</span>
+        <input type="text" id="exName" list="exNames" value="${esc(ex.name)}" placeholder="e.g. Flat press" autocomplete="off">
+        <datalist id="exNames">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      </label>
+      <div class="grid2">
+        <label class="f"><span>Sets</span><input type="number" id="exSets" inputmode="numeric" value="${ex.sets}"></label>
+        <label class="f"><span>Reps</span><input type="text" id="exReps" value="${esc(ex.reps)}" placeholder="8-12"></label>
+      </div>
+      <label class="f"><span>Rest (seconds)</span><input type="number" id="exRest" inputmode="numeric" value="${ex.rest || 90}"></label>
+      <div class="hint" id="exMuscles" style="margin-top:-4px"></div>
+      <div class="sp"></div>
+      <button class="btn wide" id="exSave">${index >= 0 ? 'Update' : 'Add to routine'}</button>
+    `, body => {
+      const nameIn = body.querySelector('#exName');
+      const paint = () => {
+        const m = musclesOf(nameIn.value);
+        body.querySelector('#exMuscles').textContent = m
+          ? 'Counts toward: ' + m
+          : nameIn.value.trim()
+            ? 'Not recognised — it will still be logged, but it will not count toward any muscle target.'
+            : '';
+      };
+      nameIn.addEventListener('input', paint); paint();
+
+      body.querySelector('#exSave').onclick = () => {
+        const name = nameIn.value.trim();
+        if(!name) return toast('Give it a name');
+        const next = {
+          name,
+          sets: Math.max(1, parseInt(body.querySelector('#exSets').value) || 3),
+          reps: body.querySelector('#exReps').value.trim() || '8-12',
+          rest: Math.max(0, parseInt(body.querySelector('#exRest').value) || 90)
+        };
+        if(index >= 0) draft[index] = Object.assign({}, draft[index], next);
+        else draft.push(next);
+        paintEditor();
+      };
+    });
+  }
+
+  /* Weekly sets per muscle across the whole rotation as it stands. */
+  function volumeCard(){
+    const perWeek = Volume.weeklySets(Store.effectivePlan());
+    const short = Volume.deficits(perWeek);
+    const keys = Object.keys(Volume.TARGETS)
+      .filter(m => (perWeek[m] || 0) > 0 || short.some(d => d.muscle === m))
+      .sort((a, b) => (perWeek[b]||0)/Volume.TARGETS[b] - (perWeek[a]||0)/Volume.TARGETS[a]);
+
+    return `
+      <div style="background:var(--card-2);border-radius:var(--r-inner);padding:14px;margin-bottom:14px">
+        <div class="row between" style="margin-bottom:10px">
+          <b style="font-size:13.5px">Weekly volume</b>
+          <span class="small muted">${short.length ? short.length + ' below minimum' : 'all covered'}</span>
+        </div>
+        ${keys.map(m => {
+          const have = perWeek[m] || 0, tgt = Volume.TARGETS[m];
+          const low = have < tgt;
+          return `<div style="margin-bottom:9px">
+            <div class="row between" style="font-size:12px">
+              <span${low ? ' style="color:var(--fg)"' : ' class="muted"'}>${esc(Volume.LABELS[m])}</span>
+              <span class="mono ${low ? '' : 'muted'}">${round(have,1)} / ${tgt}</span>
+            </div>
+            ${bar(Math.min((have/tgt)*100, 100), 100, low ? 'var(--pink)' : 'var(--lime)')}
+          </div>`;
+        }).join('')}
+        <div class="hint">Sets per muscle per week, counting assistance work as a fraction of a set. Pink means below the weekly minimum for growth.</div>
+      </div>`;
+  }
+
   function dayCard(d, i, isToday){
-    const list = (d.exercises || []).map(ex =>
+    const exercises = Store.exercisesFor(d.key);
+    const custom = Store.isCustom(d.key);
+    const list = exercises.map(ex =>
       `<li>${esc(ex.name)} — ${ex.sets} × ${esc(ex.reps)}${ex.tag ? ` <span class="tag ${ex.tag}">${ex.tag === 'core' ? 'core' : 'stability'}</span>` : ''}</li>`
     ).join('');
     return `
       <div class="day${isToday ? ' today' : ''}">
         <div class="dh">
-          <div>
-            <b>Day ${i+1} — ${esc(d.name)}</b>
+          <div class="grow">
+            <b>Day ${i+1} — ${esc(d.name)}</b>${custom ? '<span class="tag">yours</span>' : ''}
             <div class="small muted">${esc(d.focus || '')}</div>
           </div>
+          ${d.type === 'rest' && !d.exercises ? '' : `<button class="btn ghost sm" data-edit="${esc(d.key)}">Edit</button>`}
           <button class="btn ghost sm" data-toggle>Show</button>
         </div>
         <div class="daybody" hidden>

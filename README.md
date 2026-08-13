@@ -64,15 +64,35 @@ swap applies to that day only, and the replacement keeps its **own** weight
 history, because a dumbbell incline press is not the same load as a Smith
 incline press and the progression must not pretend otherwise.
 
-**Cardio** — run/walk log with automatic pace, plus a 7-day-vs-previous-7-day
-load comparison that warns you when mileage is climbing faster than your
-connective tissue can keep up with.
+Cardio lives inside Train, behind a **Session / Cardio** segmented control —
+run/walk log with automatic pace, steps, and a 7-day-vs-previous-7-day load
+comparison that warns you when mileage is climbing faster than your connective
+tissue can keep up with. Cardio days open on that panel by default.
 
 **Progress** — segmented into Nutrition (14-day protein adherence), Training
 (top set per main lift, volume) and Body (bodyweight trend), with your targets
 and JSON export/import below.
 
-**Plan** — the whole program and the nutrition reasoning, readable at the gym.
+**Plan** — the whole program and the nutrition reasoning, readable at the gym,
+plus the **routine editor**.
+
+### Your own routines
+
+Tap **Edit** on any day in Plan to replace its exercises with your own — name,
+sets, reps and rest, reorderable, with autocomplete over every exercise the app
+knows. A saved routine overrides that day for every cycle until you reset it.
+
+The editor checks **weekly sets per muscle across the whole rotation** and
+suggests one or two additions for what is short. `js/volume.js` classifies
+exercises by rule rather than lookup, so names you type yourself are still
+understood — "Flat press" is chest, "Cable bicep curls" is biceps, "Leg curl"
+is hamstrings and not biceps. Assistance work counts as a fraction of a set.
+Suggestions are filtered to muscles that belong on that day, so a push day is
+never told to add hamstring curls.
+
+Weekly minimums live in `TARGETS` at the top of `js/volume.js`. They are
+minimums for growth, not goals — the shipped rotation sits slightly under on
+side delts, which the analyser correctly flags.
 
 ## Design
 
