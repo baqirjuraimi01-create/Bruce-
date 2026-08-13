@@ -69,6 +69,9 @@ const App = (() => {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     }
 
+    Sync.start();
+    Sync.onChange(() => { if(tab === 'progress') refresh(); });
+
     refresh();
     if(imported) toast(imported.n.toLocaleString() + ' steps imported');
   }

@@ -35,9 +35,23 @@ const Store = (() => {
     }
   }
 
+  const saveHooks = [];
+  function onSave(fn){ saveHooks.push(fn); }
+
   function save(){
     try{ localStorage.setItem(KEY, JSON.stringify(state)); }
     catch(e){ console.warn('Save failed', e); toast('Storage full — export your data'); }
+    for(const fn of saveHooks){ try{ fn(); }catch(e){} }
+  }
+
+  /* A detached copy, for merging and for sync. */
+  function snapshot(){ return JSON.parse(JSON.stringify(state)); }
+
+  /* Used by sync after a merge. Does not fire save hooks — the caller
+     already knows, and re-entering sync from its own write would loop. */
+  function replaceState(next){
+    state = Object.assign(blank(), next);
+    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
   }
 
   /* ---------- day records ---------- */
@@ -380,7 +394,7 @@ const Store = (() => {
     setWeight, weightSeries, setSteps, stepsFor, performanceHistory,
     setSwap, swapFor, usualMeal, frequentFoods,
     exercisesFor, isCustom, setRoutine, resetRoutine, dayPlan, dayPlanFor, effectivePlan,
-    exportJSON, importJSON, mergeJSON, reset
+    exportJSON, importJSON, mergeJSON, reset, onSave, snapshot, replaceState
   };
 })();
 

@@ -4,8 +4,20 @@ const errs = [];
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args:['--no-sandbox','--ignore-certificate-errors'], ...(process.env.HTTPS_PROXY ? { proxy:{ server: process.env.HTTPS_PROXY, bypass:'localhost,127.0.0.1' } } : {}) });
 const ctx = await browser.newContext({ ignoreHTTPSErrors:true, viewport:{width:390,height:844} });
 const page = await ctx.newPage();
+// Some checks deliberately point the app at a dead server. The browser
+// logs that, and the collector is otherwise strict, so it is muted only
+// for the duration of those checks.
+let expectingNetworkError = false;
+const whileOffline = async fn => {
+  expectingNetworkError = true;
+  try { return await fn(); } finally { expectingNetworkError = false; }
+};
 page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
-page.on('console', m => { if(m.type()==='error') errs.push('CONSOLE: ' + m.text()); });
+page.on('console', m => {
+  if(m.type() !== 'error') return;
+  if(expectingNetworkError && /Failed to load resource|net::/.test(m.text())) return;
+  errs.push('CONSOLE: ' + m.text());
+});
 
 // Keep the suite hermetic: the app now searches online by itself as you
 // type, and a sandbox with no route to those hosts would fail the run for
@@ -413,6 +425,97 @@ await check('settings save + recalc', async () => {
   if(!/P 160 g/.test(t)) throw new Error('protein did not recalc: ' + (t.match(/Calculated:[^<]*/)||[''])[0]);
   console.log('       80kg -> P 160 g ok');
 });
+
+console.log('— sync —');
+
+// A stand-in for the Worker running the same protocol. Its state lives
+// here in the test process, not in the page: a route handler that calls
+// back into the page would deadlock, because the page is blocked waiting
+// on the very request being handled.
+let srv = { version:0, blob:null, updatedAt:null };
+// Cross-origin on purpose: the service worker passes those straight
+// through, so Playwright's interception is the only thing handling it.
+await page.route('https://fake-sync.test/**', async route => {
+  const req = route.request();
+  const send = (status, body) =>
+    route.fulfill({ status, contentType:'application/json', body:JSON.stringify(body) });
+
+  if(req.method() === 'GET') return send(200, srv);
+
+  const body = JSON.parse(req.postData() || '{}');
+  if(body.version !== srv.version)
+    return send(409, { error:'conflict', version:srv.version, blob:srv.blob });
+  srv = { version:srv.version + 1, blob:body.blob, updatedAt:new Date().toISOString() };
+  return send(200, { version:srv.version });
+});
+
+const SYNC_URL = 'https://fake-sync.test';
+let syncCode = '';
+
+await check('two devices converge through the server', async () => {
+  syncCode = await page.evaluate(() => Sync.newCode());
+  await page.evaluate(([u,c]) => Sync.configure({ url:u, code:c }), [SYNC_URL, syncCode]);
+
+  const mineBefore = await page.evaluate(() => Store.totalsFor(today()).kcal);
+  const st1 = await page.evaluate(() => Sync.run());
+  if(st1.status !== 'ok') throw new Error('first sync said: ' + st1.status + ' ' + st1.message);
+  if(srv.version !== 1) throw new Error('server version ' + srv.version);
+  if(!srv.blob) throw new Error('nothing was stored');
+  console.log('       device one pushed ' + mineBefore + ' kcal, server at v1');
+
+  // Second device: same code, empty local store, plus one entry of its own.
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil:'networkidle' });
+  await page.waitForTimeout(400);
+
+  await page.evaluate(([u,c]) => Sync.configure({ url:u, code:c }), [SYNC_URL, syncCode]);
+  await page.evaluate(() => Store.addEntry(today(), { name:'Second device shake', grams:100,
+    kcal:250, p:25, c:18, f:7, meal:'extras', unit:'serving' }));
+
+  const st2 = await page.evaluate(() => Sync.run());
+  if(st2.status !== 'ok') throw new Error('second sync said: ' + st2.status + ' ' + st2.message);
+
+  const total = await page.evaluate(() => Store.totalsFor(today()).kcal);
+  if(total !== mineBefore + 250)
+    throw new Error(`expected ${mineBefore + 250} after merge, got ${total}`);
+  console.log('       device two pulled and merged -> ' + total + ' kcal, both sides present');
+});
+
+await check('the encrypted blob is unreadable on the server', async () => {
+  const raw = Buffer.from(srv.blob, 'base64').toString('binary');
+  if(/Second device shake|Oats|entries|weight/i.test(raw))
+    throw new Error('plaintext is visible in what was uploaded');
+  console.log('       ' + srv.blob.length + ' bytes of ciphertext, no readable field names');
+});
+
+await check('a stale write is retried rather than lost', async () => {
+  const before = await page.evaluate(() => Store.totalsFor(today()).kcal);
+  srv.version += 5;                       // the server moved on without us
+  const st = await page.evaluate(() => Sync.run());
+  if(st.status !== 'ok') throw new Error('sync gave up: ' + st.status + ' ' + st.message);
+  const after = await page.evaluate(() => Store.totalsFor(today()).kcal);
+  if(after !== before) throw new Error(`data changed during retry: ${before} -> ${after}`);
+  console.log('       recovered from a version clash without losing anything');
+});
+
+await check('the wrong code is reported, not silently ignored', async () => {
+  await page.evaluate(u => Sync.configure({ url:u, code:'ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ' }), SYNC_URL);
+  const st = await page.evaluate(() => Sync.run());
+  if(st.status !== 'error') throw new Error('expected an error, got ' + st.status);
+  if(!/code/i.test(st.message)) throw new Error('unhelpful message: ' + st.message);
+  console.log('       "' + st.message + '"');
+});
+
+await check('an unreachable server does not lose local data', () => whileOffline(async () => {
+  const before = await page.evaluate(() => Store.totalsFor(today()).kcal);
+  await page.evaluate(() => Sync.configure({ url:'http://localhost:9977/nope', code:'ABCDE-FGHJK-MNPQR-STUVW' }));
+  const st = await page.evaluate(() => Sync.run());
+  if(st.status !== 'error') throw new Error('expected an error, got ' + st.status);
+  const after = await page.evaluate(() => Store.totalsFor(today()).kcal);
+  if(after !== before) throw new Error(`data lost: ${before} -> ${after}`);
+  await page.evaluate(() => Sync.turnOff());
+  console.log('       stayed offline-safe: ' + after + ' kcal intact');
+}));
 
 console.log('— transferring between two browsers —');
 await check('copy produces a backup and merge brings the other side in', async () => {

@@ -7,7 +7,7 @@ const SHELL = [
   './', './index.html', './css/styles.css', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
   './js/data.js', './js/merge.js', './js/store.js', './js/nutrition.js', './js/scanner.js',
-  './js/progression.js', './js/volume.js', './js/eatout.js', './js/ui.js', './js/views.home.js', './js/views.food.js', './js/views.train.js',
+  './js/progression.js', './js/volume.js', './js/eatout.js', './js/sync.js', './js/ui.js', './js/views.home.js', './js/views.food.js', './js/views.train.js',
   './js/views.cardio.js', './js/views.progress.js', './js/views.plan.js',
   './js/app.js'
 ];

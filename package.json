@@ -6,9 +6,11 @@
   "scripts": {
     "start": "python3 -m http.server 8765",
     "test": "npm run test:unit && npm run test:app",
-    "test:unit": "node test/progression.test.cjs && node test/volume.test.cjs && node test/eatout.test.cjs && node test/nutrition.test.cjs && node test/merge.test.cjs",
+    "test:unit": "node test/progression.test.cjs && node test/volume.test.cjs && node test/eatout.test.cjs && node test/nutrition.test.cjs && node test/merge.test.cjs && node test/worker.test.mjs && node test/sync.test.mjs",
     "test:app": "node test/smoke.mjs",
-    "icons": "node icons/build-icons.mjs"
+    "icons": "node icons/build-icons.mjs",
+    "test:worker": "node test/worker.test.mjs",
+    "test:sync": "node test/sync.test.mjs"
   },
   "devDependencies": {
     "playwright": "^1.49.0"

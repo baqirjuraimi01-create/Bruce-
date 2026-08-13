@@ -177,6 +177,13 @@ npm run test:unit # progression logic only — no browser needed
 rep prescription in the program parses, and each branch of the decision (add
 weight, add reps, back off, bodyweight, AMRAP, deload) is asserted.
 
+`test/worker.test.mjs` runs the sync server's whole protocol against a fake KV
+— versioning, conflict refusal, id isolation, malformed input, CORS — with no
+Cloudflare account and no network. `test/sync.test.mjs` exercises the client's
+crypto under Node's WebCrypto: round trips, that plaintext never appears in the
+uploaded blob, that a wrong code fails rather than returning junk, and that
+tampered ciphertext is rejected.
+
 `test/smoke.mjs` drives the real app in Chromium at phone viewport: logging, editing, the
 rotation, the rest timer, volume maths, pace, target recalculation,
 persistence across reload, progression carrying across a full 9-day cycle, and
@@ -254,6 +261,40 @@ tracker's steps are there depends on its companion app: some write to Apple
 Health, some only keep data in their own app. If yours does not, the Shortcut
 still works using your iPhone's own step count, or enter the number by hand.
 
+## Sync
+
+Optional, off until you set it up, and the app is unchanged without it.
+
+**Progress → Sync → Set up sync.** The server is a single Cloudflare Worker you
+deploy yourself in about five minutes, entirely from a browser — see
+[`server/README.md`](server/README.md). Free tier covers this many times over.
+
+Once on, it syncs when you open the app, when you switch back to it, and a few
+seconds after you log something. There is a *Sync now* button for certainty.
+
+**It is end-to-end encrypted.** The sync code is the only secret, and two
+independent things are derived from it:
+
+```
+id      = SHA-256("bruce.sync.id.v1|" + code)      names the row
+enc key = PBKDF2(code, "bruce.sync.enc.v1", 150k)  AES-GCM 256
+```
+
+Because they come from different derivations, the id handed to the server
+reveals nothing about the key. The server stores ciphertext under a hash and
+can read none of it — which matters, since it is a free service on the public
+internet holding a record of what you eat and what you weigh.
+
+Conflicts use the same `Merge` as manual transfer, so two devices that both
+logged something end up with both. A write states the version it read; if the
+server has moved on it returns 409 with the current copy, and the client merges
+and retries. Sync settings live outside the synced state on purpose, so turning
+sync off on one device does not turn it off everywhere.
+
+**The code cannot be recovered.** Lose it and the data on the server can never
+be decrypted, by anyone. Local data is untouched, so it is not a catastrophe,
+but write it down.
+
 ## Your data, and using it in two places
 
 Everything is in `localStorage` on the device and browser you entered it in.
@@ -264,12 +305,13 @@ the Home Screen runs in a **different storage container from Safari**, even at
 the same URL. Log lunch in Safari and it will not appear in the home-screen
 app, and the reverse. A desktop browser is a third separate store again.
 
-Two ways to live with it:
+Three ways to live with it:
 
-1. **Pick one and stay there.** The home-screen app is the better choice —
+1. **Turn on sync** (above). This is the real fix.
+2. **Pick one and stay there.** The home-screen app is the better choice —
    fullscreen, offline, and the camera scanner works.
-2. **Transfer when you need to.** Progress → Transfer & backup → **Copy my
-   data** in one, **Paste & merge** in the other.
+3. **Transfer by hand.** Progress → Transfer & backup → **Copy my data** in
+   one, **Paste & merge** in the other. No server needed.
 
 Merging (`js/merge.js`) is built so it cannot lose anything: collections are
 unioned by id, and where two copies disagree on a single value the one already

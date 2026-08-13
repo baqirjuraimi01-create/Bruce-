@@ -81,6 +81,8 @@ const ProgressView = (() => {
         ${settingsForm(tgt)}
       </div>
 
+      ${syncCard()}
+
       <div class="card">
         ${cardHead('Transfer &amp; backup')}
         <div class="hint" style="margin-top:-6px">There is no account and no server, so each browser keeps its own log. On an iPhone the home-screen app and Safari are <b>separate stores</b> even at the same address — anything logged in one is invisible to the other. Copy from one, merge into the other.</div>
@@ -101,6 +103,105 @@ const ProgressView = (() => {
       </div>
     `;
     wire(root, date);
+  }
+
+  /* ---------- sync ---------- */
+  function syncCard(){
+    const st = Sync.status();
+    if(!st.on){
+      return `
+        <div class="card">
+          ${cardHead('Sync')}
+          <div class="hint" style="margin-top:-6px">Off. Every browser keeps its own log — the home-screen app and Safari included. Turn this on and they all hold the same one.</div>
+          <div class="sp"></div>
+          <button class="btn wide" data-act="syncSetup">Set up sync</button>
+        </div>`;
+    }
+    const dot = { ok:'var(--lime)', syncing:'var(--blue)', error:'#e2607a', idle:'var(--dim)' }[st.status] || 'var(--dim)';
+    const when = st.at ? whenText(st.at) : 'not yet';
+    return `
+      <div class="card">
+        ${cardHead('Sync')}
+        <div class="row between">
+          <div class="row" style="gap:9px">
+            <span style="width:9px;height:9px;border-radius:50%;background:${dot};display:inline-block"></span>
+            <div>
+              <div style="font-weight:500;font-size:14px">${
+                st.status === 'syncing' ? 'Syncing…' :
+                st.status === 'error'   ? 'Not synced' : 'Up to date'}</div>
+              <div class="tiny muted">${st.status === 'error' ? esc(st.message) : 'last synced ' + esc(when)}</div>
+            </div>
+          </div>
+          <button class="btn ghost sm" data-act="syncNow">Sync now</button>
+        </div>
+        <div class="hr"></div>
+        <div class="row wrap" style="gap:8px">
+          <button class="btn ghost sm grow" data-act="syncCode">Show my code</button>
+          <button class="btn ghost sm grow" data-act="syncOff">Turn off</button>
+        </div>
+        <div class="hint">Your data is encrypted on this device before it is sent. The server stores it under a hash and cannot read any of it.</div>
+      </div>`;
+  }
+
+  function whenText(iso){
+    const secs = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+    if(secs < 60) return 'just now';
+    if(secs < 3600) return Math.floor(secs/60) + ' min ago';
+    if(secs < 86400) return Math.floor(secs/3600) + ' h ago';
+    return prettyDate(fmt(new Date(iso)));
+  }
+
+  function openSyncSetup(){
+    const st = Sync.status();
+    openSheet(`
+      <h2>Set up sync</h2>
+      <div class="hint" style="margin-top:-6px">Do this on one device first, then repeat on the other using the <b>same</b> two values. See server/README.md in the repo for the five-minute server setup.</div>
+      <div class="sp"></div>
+      <label class="f"><span>Sync server address</span>
+        <input type="text" id="syUrl" value="${esc(st.url || '')}" placeholder="https://bruce-sync.yourname.workers.dev" autocomplete="off"></label>
+      <label class="f"><span>Sync code</span>
+        <input type="text" id="syCode" value="${esc(st.code || '')}" placeholder="ABCDE-FGHJK-MNPQR-STUVW" autocomplete="off"></label>
+      <button class="btn ghost wide" id="syNew">Create a new code</button>
+      <div class="hint">Use <b>Create a new code</b> on the first device only. On the second, type in the code from the first — that is what pairs them. Anyone with the code can read your data, so keep it to yourself.</div>
+      <div class="sp"></div>
+      <button class="btn wide" id="sySave">Turn on sync</button>
+    `, body => {
+      body.querySelector('#syNew').onclick = () => {
+        body.querySelector('#syCode').value = Sync.newCode();
+        toast('New code created — you will need it on your other device');
+      };
+      body.querySelector('#sySave').onclick = async () => {
+        const url = body.querySelector('#syUrl').value.trim();
+        const code = body.querySelector('#syCode').value.trim();
+        if(!/^https?:\/\//.test(url)) return toast('Enter the full server address, starting with https://');
+        if(Sync.normaliseCode(code).length < 12) return toast('That code looks too short');
+        Sync.configure({ url, code });
+        closeSheet();
+        toast('Syncing…');
+        await Sync.run();
+        App.refresh();
+      };
+    });
+  }
+
+  function openSyncCode(){
+    const st = Sync.status();
+    openSheet(`
+      <h2>Your sync code</h2>
+      <div class="hint" style="margin-top:-6px">Type this into your other device, along with the same server address, to pair them.</div>
+      <div class="sp"></div>
+      <div class="card" style="text-align:center;padding:22px 14px">
+        <div class="mono" style="font-size:21px;font-weight:500;letter-spacing:.06em">${esc(st.code)}</div>
+        <div class="tiny muted" style="margin-top:10px">${esc(st.url)}</div>
+      </div>
+      <button class="btn wide" id="cpCode">Copy code</button>
+      <div class="hint">Anyone with this code and the address can read your log. It is the only thing protecting it — treat it like a password.</div>
+    `, body => {
+      body.querySelector('#cpCode').onclick = async () => {
+        try{ await navigator.clipboard.writeText(st.code); toast('Copied'); }
+        catch(e){ toast('Select the code above and copy it'); }
+      };
+    });
   }
 
   function last(date, n){
@@ -226,6 +327,10 @@ const ProgressView = (() => {
 
   function wire(root, date){
     on(root, 'sub', el => { sub = el.dataset.key; App.refresh(); });
+    on(root, 'syncSetup', openSyncSetup);
+    on(root, 'syncCode',  openSyncCode);
+    on(root, 'syncNow',   async () => { await Sync.run(); App.refresh(); });
+    on(root, 'syncOff',   () => { Sync.turnOff(); toast('Sync turned off'); App.refresh(); });
     on(root, 'protInfo', () => toast('Aim for 90%+ of your protein target on most days'));
 
     on(root, 'saveSettings', () => {
