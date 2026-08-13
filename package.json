@@ -7,7 +7,8 @@
     "start": "python3 -m http.server 8765",
     "test": "npm run test:unit && npm run test:app",
     "test:unit": "node test/progression.test.cjs",
-    "test:app": "node test/smoke.mjs"
+    "test:app": "node test/smoke.mjs",
+    "icons": "node icons/build-icons.mjs"
   },
   "devDependencies": {
     "playwright": "^1.49.0"

@@ -84,6 +84,24 @@ image requests. Layout tokens live at the top of `css/styles.css` — the
 palette, corner radii and the three shadow levels are all CSS custom
 properties, so retheming is a matter of editing `:root`.
 
+## Icons
+
+The mark is the app's own calorie donut — ink field, muted track ring, lime arc
+— with a barbell through it. Colours come straight from the CSS tokens, so the
+icon and the UI cannot drift apart.
+
+```bash
+npm run icons
+```
+
+Rebuilds `icon.svg` (rounded, for browser tabs), `icon-192.png` / `icon-512.png`
+(PWA, declared both `any` and `maskable` — the ring sits inside the 80% safe
+circle so Android's crop cannot clip it) and `apple-touch-icon.png` at 180×180.
+That last one matters: **iOS ignores the web manifest** for Add to Home Screen
+and reads `<link rel="apple-touch-icon">`, so without it you get a screenshot
+thumbnail instead of an icon. Edit the SVG in `icons/build-icons.mjs` and re-run;
+it renders through Chromium, so the curves are properly anti-aliased.
+
 ## Barcode scanning
 
 Uses the browser's native `BarcodeDetector` API — no library, no bundle.
