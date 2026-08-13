@@ -431,6 +431,35 @@ await check('data survives reload', async () => {
   if(!/Test Bar/.test(t)) throw new Error('log lost on reload');
 });
 
+console.log('— eating out —');
+await check('the estimator opens and reacts to what you pick', async () => {
+  await page.click('[data-tab="food"]'); await page.waitForTimeout(250);
+  await page.click('[data-act="eatout"]'); await page.waitForTimeout(300);
+  // read the headline figure only — scraping the whole panel would splice
+  // the estimate together with the range either side of it
+  const read = async () => parseInt(
+    (await page.locator('#eoOut .kcal-big').textContent()).replace(/[^0-9]/g,''), 10);
+  const grilled = await page.locator('.chip', { hasText:'Grilled or steamed' });
+  await grilled.click(); await page.waitForTimeout(200);
+  const light = await read();
+  await page.locator('.chip', { hasText:'Creamy' }).click(); await page.waitForTimeout(200);
+  const heavy = await read();
+  if(!(heavy > light)) throw new Error(`rich sauce did not raise the estimate: ${light} -> ${heavy}`);
+  console.log('       grilled ' + light + ' kcal -> rich ' + heavy + ' kcal');
+});
+await check('a range is shown, not a false precision', async () => {
+  const t = await page.textContent('#eoOut');
+  if(!/probably [\d,]+–[\d,]+/.test(t)) throw new Error('no range: ' + t.replace(/\s+/g,' ').trim());
+});
+await check('logging the estimate adds it to the day', async () => {
+  const before = await page.evaluate(() => Store.totalsFor(today()).kcal);
+  await page.click('#eoAdd'); await page.waitForTimeout(350);
+  const after = await page.evaluate(() => Store.totalsFor(today()).kcal);
+  if(!(after > before)) throw new Error(`total did not move: ${before} -> ${after}`);
+  if(!/Eating out/.test(await page.textContent('#view'))) throw new Error('entry not listed');
+  console.log('       day total ' + before + ' -> ' + after + ' kcal');
+});
+
 console.log('— Shortcuts step import via URL —');
 await check('?steps= imports and is stripped from the URL', async () => {
   await page.goto(`http://localhost:${process.env.PORT || 8765}/index.html?steps=11750`, { waitUntil:'networkidle' });

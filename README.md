@@ -172,6 +172,20 @@ barcode parsing against Open Food Facts response fixtures (including kJ-only
 products, missing nutrition data and unknown barcodes). Set `CHROME_PATH` to
 use a pre-installed Chromium.
 
+## Eating out
+
+You cannot weigh a restaurant plate and you cannot see the oil, which is where
+the calories hide — the same chicken and rice is ~485 kcal grilled or ~775 kcal
+with a rich sauce, and nothing visible on the plate distinguishes them.
+
+So the estimator (`js/eatout.js`) asks only what can actually be judged at a
+table — portions by hand, and how the food was cooked — and reports a **range**
+rather than a false-precision number. 1 palm ≈ 110 g cooked meat or fish,
+1 fist ≈ 150 g cooked rice or potato. Uncertainty starts at ±22% and widens for
+rich sauces, frying and big portions, capped at ±35%. The midpoint is logged.
+
+The component values are in the tables at the top of the module.
+
 ## Steps and your fitness tracker
 
 Steps can be entered by hand on Home or the Cardio tab, and the daily goal is

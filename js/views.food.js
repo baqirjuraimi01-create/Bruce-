@@ -21,6 +21,8 @@ const FoodView = (() => {
           <button class="btn grow" data-act="scan">Scan barcode</button>
           <button class="btn ghost grow" data-act="search">Search food</button>
         </div>
+        <div class="sp"></div>
+        <button class="btn ghost wide" data-act="eatout">Eating out — estimate a meal</button>
         ${proteinLeft > 0 ? `<div class="hint">${proteinLeft} g of protein still to go${proteinHint(proteinLeft)}</div>` : ''}
       </div>
 
@@ -111,6 +113,7 @@ const FoodView = (() => {
     on(root, 'quick',  el => openRecent(date, el.dataset.meal || guessMeal()));
     on(root, 'preset', el => addPreset(date, +el.dataset.i));
     on(root, 'usual',  el => addUsual(date, el.dataset.meal));
+    on(root, 'eatout', el => openEatOut(date, el.dataset.meal || guessMeal()));
     on(root, 'delEntry', el => { Store.removeEntry(date, el.dataset.id); App.refresh(); });
     on(root, 'editEntry', el => editEntry(date, el.dataset.id));
     on(root, 'saveWeight', () => {
@@ -350,6 +353,106 @@ const FoodView = (() => {
         if(!food.kcal) food.kcal = round(food.p*4 + food.c*4 + food.f*9, 0);
         Store.saveFood(food);
         openPortion(date, meal, food);
+      };
+    });
+  }
+
+  /* ---------------- eating out ----------------
+     No scale, no label, and the oil is invisible. So this asks only
+     what can actually be judged at a table and shows a range. */
+  function openEatOut(date, meal){
+    let sel = { protein:'lean', palms:1, carb:'rice', fists:1,
+                sauce:'medium', veg:true, drink:'none', extras:[] };
+
+    const opts = (obj, key, current) => Object.keys(obj).map(k =>
+      `<button class="chip${current === k ? ' on' : ''}" data-set="${key}" data-val="${k}">${
+        esc((obj[k].label || k).split(' — ')[0])}</button>`).join('');
+
+    const paint = body => {
+      const r = EatOut.estimate(sel);
+      body.querySelector('#eoOut').innerHTML = `
+        <div class="row between" style="align-items:flex-end">
+          <div>
+            <div class="kcal-big mono">${r.kcal.toLocaleString()}<sup>kcal</sup></div>
+            <div class="small muted" style="margin-top:4px">probably ${r.low.toLocaleString()}–${r.high.toLocaleString()}</div>
+          </div>
+          <div class="right small mono">P ${r.p} · C ${r.c} · F ${r.f}</div>
+        </div>
+        <div class="ticks" style="margin-top:12px"><i style="width:${clamp(r.kcal/25, 5, 100)}%"></i></div>
+        <div class="tiny muted" style="margin-top:7px">±${r.spread}% — the honest margin on a plate you did not cook.</div>`;
+      body.querySelectorAll('[data-set]').forEach(b => {
+        const k = b.dataset.set, v = b.dataset.val;
+        const on = k === 'extras' ? sel.extras.includes(v)
+                 : String(sel[k]) === v;
+        b.classList.toggle('on', on);
+      });
+    };
+
+    openSheet(`
+      <h2>Eating out</h2>
+      <div class="hint" style="margin-top:-6px">Judge it by hand: <b>1 palm</b> ≈ 110 g of cooked meat or fish, <b>1 fist</b> ≈ 150 g of rice or potato. The sauce question matters more than the rest — it is where restaurant calories hide.</div>
+
+      <div class="card" id="eoOut" style="margin:14px 0"></div>
+
+      <div class="small muted" style="margin-bottom:6px">Protein</div>
+      <div class="chips" style="margin-bottom:10px">${opts(EatOut.PROTEIN, 'protein', sel.protein)}</div>
+      <div class="chips" style="margin-bottom:16px">
+        ${[0.5,1,1.5,2,3].map(n => `<button class="chip" data-set="palms" data-val="${n}">${n} palm${n===1?'':'s'}</button>`).join('')}
+      </div>
+
+      <div class="small muted" style="margin-bottom:6px">Carbs</div>
+      <div class="chips" style="margin-bottom:10px">${opts(EatOut.CARB, 'carb', sel.carb)}</div>
+      <div class="chips" style="margin-bottom:16px">
+        ${[0.5,1,1.5,2].map(n => `<button class="chip" data-set="fists" data-val="${n}">${n} fist${n===1?'':'s'}</button>`).join('')}
+      </div>
+
+      <div class="small muted" style="margin-bottom:6px">How was it cooked?</div>
+      <div class="chips" style="margin-bottom:16px">${opts(EatOut.SAUCE, 'sauce', sel.sauce)}</div>
+
+      <div class="small muted" style="margin-bottom:6px">Drink</div>
+      <div class="chips" style="margin-bottom:16px">${opts(EatOut.DRINK, 'drink', sel.drink)}</div>
+
+      <div class="small muted" style="margin-bottom:6px">Anything else</div>
+      <div class="chips" style="margin-bottom:16px">
+        <button class="chip" data-set="veg" data-val="true">Vegetables</button>
+        ${Object.keys(EatOut.EXTRA).map(k =>
+          `<button class="chip" data-set="extras" data-val="${k}">${esc(EatOut.EXTRA[k].label.split(' or ')[0])}</button>`).join('')}
+      </div>
+
+      <label class="f"><span>Meal</span>
+        <select id="eoMeal">${MEALS.map(m => `<option value="${m.key}"${m.key===meal?' selected':''}>${m.label}</option>`).join('')}</select>
+      </label>
+      <button class="btn wide" id="eoAdd">Log the estimate</button>
+      <div class="hint">Logs the midpoint. Do not agonise over it — one restaurant meal a week is noise against your weekly total, and protein is the number that actually matters.</div>
+    `, body => {
+      body.querySelectorAll('[data-set]').forEach(b => {
+        b.onclick = () => {
+          const k = b.dataset.set, v = b.dataset.val;
+          if(k === 'extras'){
+            sel.extras = sel.extras.includes(v) ? sel.extras.filter(x => x !== v) : sel.extras.concat(v);
+          } else if(k === 'veg'){
+            sel.veg = !sel.veg;
+          } else if(k === 'palms' || k === 'fists'){
+            sel[k] = parseFloat(v);
+          } else {
+            sel[k] = v;
+          }
+          paint(body);
+        };
+      });
+      paint(body);
+
+      body.querySelector('#eoAdd').onclick = () => {
+        const r = EatOut.estimate(sel);
+        const mealKey = body.querySelector('#eoMeal').value;
+        // Stored as a 1-portion entry so editing grams later scales it sanely.
+        Store.addEntry(date, {
+          name: r.label, brand:'', barcode:'', grams:100,
+          kcal:r.kcal, p:r.p, c:r.c, f:r.f, meal:mealKey, source:'Estimate'
+        });
+        closeSheet();
+        toast(`Logged ~${r.kcal} kcal`);
+        App.refresh();
       };
     });
   }

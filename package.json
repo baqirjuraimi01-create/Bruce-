@@ -6,7 +6,7 @@
   "scripts": {
     "start": "python3 -m http.server 8765",
     "test": "npm run test:unit && npm run test:app",
-    "test:unit": "node test/progression.test.cjs && node test/volume.test.cjs",
+    "test:unit": "node test/progression.test.cjs && node test/volume.test.cjs && node test/eatout.test.cjs",
     "test:app": "node test/smoke.mjs",
     "icons": "node icons/build-icons.mjs"
   },
