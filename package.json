@@ -1,0 +1,13 @@
+{
+  "name": "bruce-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lifting, running and nutrition tracker with barcode scanning.",
+  "scripts": {
+    "start": "python3 -m http.server 8765",
+    "test": "node test/smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}
