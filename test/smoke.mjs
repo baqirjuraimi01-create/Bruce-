@@ -7,6 +7,16 @@ const page = await ctx.newPage();
 page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
 page.on('console', m => { if(m.type()==='error') errs.push('CONSOLE: ' + m.text()); });
 
+// Keep the suite hermetic: the app now searches online by itself as you
+// type, and a sandbox with no route to those hosts would fail the run for
+// reasons that have nothing to do with the code. Both food APIs are stubbed
+// empty here; the barcode tests register their own fixtures later, and a
+// later route takes precedence.
+const stubEmpty = (url, body) => page.route(url, r =>
+  r.fulfill({ status:200, contentType:'application/json', body }));
+await stubEmpty('**/world.openfoodfacts.org/**', JSON.stringify({ products:[], status:0 }));
+await stubEmpty('**/api.nal.usda.gov/**',        JSON.stringify({ foods:[] }));
+
 await page.goto(`http://localhost:${process.env.PORT || 8765}/index.html`, { waitUntil:'networkidle' });
 
 const check = async (label, fn) => {
