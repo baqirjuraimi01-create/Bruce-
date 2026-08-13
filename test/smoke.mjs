@@ -115,6 +115,43 @@ await check('volume card computes', async () => {
   if(!m) throw new Error('no volume card');
   console.log('       volume:', m[1], 'kg');
 });
+await check('progression: maxing the range prescribes more weight next session', async () => {
+  // Fill every bench set at 80 kg x 8 (top of the 5-8 range) and tick them.
+  const ex = page.locator('.ex').first();
+  const n = await ex.locator('.setrow').count();
+  for(let i = 0; i < n; i++){
+    const row = ex.locator('.setrow').nth(i);
+    await row.locator('.w').fill('80');
+    await row.locator('.r').fill('8');
+    const tick = row.locator('.tick');
+    if(!(await tick.getAttribute('class')).includes('on')) await tick.click();
+    await page.waitForTimeout(60);
+  }
+  await page.waitForTimeout(200);
+  // Jump a full cycle: the next Push day.
+  for(let i = 0; i < 9; i++){ await page.click('#nextDay'); await page.waitForTimeout(60); }
+  await page.waitForTimeout(250);
+  if(!/Push/.test(await page.textContent('#dateMeta'))) throw new Error('not back on Push');
+  const target = await page.locator('.target').first().textContent();
+  if(!/82\.5 kg × 5/.test(target)) throw new Error('target was: ' + target.trim());
+  console.log('       ' + target.trim());
+  for(let i = 0; i < 9; i++){ await page.click('#prevDay'); await page.waitForTimeout(50); }
+  await page.waitForTimeout(200);
+});
+
+await check('progression: falling short holds the weight', async () => {
+  const ex = page.locator('.ex').first();
+  await ex.locator('.setrow').nth(1).locator('.r').fill('6');
+  await page.waitForTimeout(150);
+  for(let i = 0; i < 9; i++){ await page.click('#nextDay'); await page.waitForTimeout(50); }
+  await page.waitForTimeout(250);
+  const target = await page.locator('.target').first().textContent();
+  if(!/Stay at 80 kg/.test(target)) throw new Error('target was: ' + target.trim());
+  console.log('       ' + target.trim());
+  for(let i = 0; i < 9; i++){ await page.click('#prevDay'); await page.waitForTimeout(50); }
+  await page.waitForTimeout(200);
+});
+
 await check('rotation advances to Pull tomorrow', async () => {
   await page.click('#nextDay');
   await page.waitForTimeout(200);

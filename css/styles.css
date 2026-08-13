@@ -203,6 +203,15 @@ label.f > span{display:block;font-size:11.5px;color:var(--dim);margin-bottom:6px
 .tag.core{background:#fdf3dc;color:#a8811f}
 .tag.stab{background:#eef7d6;color:#6f8a1c}
 
+/* today's prescription, derived from last session */
+.target{
+  margin-top:11px;padding:10px 13px;border-radius:13px;
+  font-size:12.5px;font-weight:500;line-height:1.45;letter-spacing:-.005em
+}
+.target.up{background:#f2f8e0;color:#4e6415}
+.target.hold{background:#eef0f4;color:#454b55}
+.target.down{background:#fdeef1;color:#8b3c4d}
+
 /* ---------- floating dark rail ---------- */
 .rail{
   position:fixed;right:12px;top:50%;transform:translateY(-50%);z-index:18;

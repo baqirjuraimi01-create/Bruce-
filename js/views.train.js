@@ -63,8 +63,13 @@ const TrainView = (() => {
 
   function exerciseCard(ex, i, date, sess){
     const saved = sess.exercises[ex.name] || Array.from({ length:ex.sets }, () => ({ w:'', r:'', done:false }));
-    const last = Store.lastPerformance(ex.name, date);
     const allDone = saved.length && saved.every(s => s.done);
+
+    // What to do today, worked out from what was logged last time.
+    const nt = Progression.nextTarget(ex, date);
+    const last = nt.last;
+    const wPlace = nt.res.weight ? nt.res.weight : 'kg';
+    const rPlace = nt.res.reps != null ? nt.res.reps : (nt.res.target != null ? nt.res.target : 'reps');
 
     return `
       <div class="ex${allDone ? ' done' : ''}" data-ex="${esc(ex.name)}">
@@ -75,12 +80,13 @@ const TrainView = (() => {
           </div>
           <button class="iconbtn" data-act="rest" data-sec="${ex.rest||90}" aria-label="Rest timer">◷</button>
         </div>
-        ${last ? `<div class="hint">Last time (${prettyDate(last.date)}): ${last.sets.map(s => `${s.w||'-'}kg × ${s.r||'-'}`).join(', ')}</div>` : ''}
+        <div class="target ${nt.tone}">${esc(nt.text)}</div>
+        ${last ? `<div class="hint" style="margin-top:6px">Last time (${prettyDate(last.date)}): ${last.sets.map(s => `${s.w ? s.w + 'kg × ' : ''}${s.r||'-'}`).join(', ')}</div>` : ''}
         ${saved.map((s, si) => `
           <div class="setrow" data-si="${si}">
             <div class="idx">${si+1}</div>
-            <input type="number" inputmode="decimal" class="w" placeholder="kg" value="${esc(s.w)}">
-            <input type="number" inputmode="numeric" class="r" placeholder="reps" value="${esc(s.r)}">
+            <input type="number" inputmode="decimal" class="w" placeholder="${esc(wPlace)}" value="${esc(s.w)}">
+            <input type="number" inputmode="numeric" class="r" placeholder="${esc(rPlace)}" value="${esc(s.r)}">
             <input type="number" inputmode="decimal" class="rpe" placeholder="RPE" value="${esc(s.rpe||'')}">
             <button class="tick${s.done ? ' on' : ''}" data-act="tick">✓</button>
           </div>`).join('')}

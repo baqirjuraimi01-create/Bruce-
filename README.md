@@ -30,6 +30,15 @@ RPE per set, what you lifted for that exercise last time, and a rest timer that
 starts when you tick a set. Ticking an empty set copies the previous set's
 numbers forward.
 
+Every exercise shows **what to do today**, worked out from your last session by
+double progression (`js/progression.js`): hold the weight until every set hits
+the top of the rep range, then add load — 5 kg on lower-body compounds, 2.5 kg
+elsewhere — and drop back to the bottom of the range. Fall below the floor and
+it prescribes a 10% cut instead. The target weight and reps appear as greyed
+placeholders in the set fields, so the numbers are already in front of you.
+Bodyweight work progresses on reps or time; pull-ups are scored on total reps;
+every 6th cycle is flagged as a deload.
+
 **Cardio** — run/walk log with automatic pace, plus a 7-day-vs-previous-7-day
 load comparison that warns you when mileage is climbing faster than your
 connective tissue can keep up with.
@@ -85,14 +94,20 @@ Targets are calculated with Mifflin-St Jeor and your goal, anchoring protein at
 ```bash
 npm install
 npx playwright install chromium     # skip if browsers are already provisioned
-npm test
+npm test          # unit tests, then the browser suite
+npm run test:unit # progression logic only — no browser needed
 ```
 
-Drives the real app in Chromium at phone viewport: logging, editing, the
+`test/progression.test.cjs` covers the progression logic in isolation: every
+rep prescription in the program parses, and each branch of the decision (add
+weight, add reps, back off, bodyweight, AMRAP, deload) is asserted.
+
+`test/smoke.mjs` drives the real app in Chromium at phone viewport: logging, editing, the
 rotation, the rest timer, volume maths, pace, target recalculation,
-persistence across reload, and barcode parsing against Open Food Facts response
-fixtures (including kJ-only products, missing nutrition data and unknown
-barcodes). Set `CHROME_PATH` to use a pre-installed Chromium.
+persistence across reload, progression carrying across a full 9-day cycle, and
+barcode parsing against Open Food Facts response fixtures (including kJ-only
+products, missing nutrition data and unknown barcodes). Set `CHROME_PATH` to
+use a pre-installed Chromium.
 
 ## Your data
 
