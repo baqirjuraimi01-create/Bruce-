@@ -431,6 +431,43 @@ await check('data survives reload', async () => {
   if(!/Test Bar/.test(t)) throw new Error('log lost on reload');
 });
 
+console.log('— flexible search —');
+await check('finds a product when the words are split across name and brand', async () => {
+  await page.click('[data-tab="food"]'); await page.waitForTimeout(250);
+  // a bottle you drank and binned: saved once, found by any wording after
+  await page.evaluate(() => Store.saveFood({
+    id:'man_rokeby', barcode:'', name:'Protein Drink', brand:'Rokeby Farms',
+    kcal:250, p:25, c:18, f:7, unit:'serving', serving:100,
+    servingLabel:'1 serving', source:'Saved by you'
+  }));
+  await page.click('[data-act="search"][data-meal="extras"]'); await page.waitForTimeout(300);
+
+  for(const q of ['rokeby protein', 'protein rokeby', 'ROKEBY  farms protein']){
+    await page.fill('#qIn', q);
+    await page.waitForTimeout(350);
+    const names = await page.$$eval('#qRes .item .t', e => e.map(x => x.textContent.trim()));
+    if(!names.includes('Protein Drink')) throw new Error(`"${q}" found: ${names.join(', ') || 'nothing'}`);
+  }
+  console.log('       matched on "rokeby protein", "protein rokeby" and mixed case');
+});
+
+await check('results say whether values are per serving or per 100 g', async () => {
+  await page.fill('#qIn', 'rokeby'); await page.waitForTimeout(350);
+  const line = await page.locator('#qRes .item .s').first().textContent();
+  if(!/per serving/.test(line)) throw new Error('row read: ' + line.replace(/\s+/g,' ').trim());
+});
+
+await check('a miss explains itself and seeds manual entry', async () => {
+  await page.fill('#qIn', 'zzzq nonexistent drink'); await page.waitForTimeout(1200);
+  const t = await page.textContent('#qRes');
+  if(!/Nothing found/.test(t)) throw new Error('empty state was: ' + t.replace(/\s+/g,' ').trim());
+  await page.click('#qManual'); await page.waitForTimeout(300);
+  const name = await page.inputValue('#nIn');
+  if(name !== 'zzzq nonexistent drink') throw new Error('name prefilled as: ' + name);
+  console.log('       carries the query into the form so nothing is retyped');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+});
+
 console.log('— logging something that is not a meal —');
 await check('there is an Extras slot alongside the meals', async () => {
   await page.click('[data-tab="food"]'); await page.waitForTimeout(250);

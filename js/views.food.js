@@ -166,10 +166,10 @@ const FoodView = (() => {
     openSheet(`
       <h2>Add to ${esc(MEALS.find(m => m.key === meal).label)}</h2>
       <div class="row" style="gap:8px">
-        <input type="search" id="qIn" placeholder="chicken breast, oats, protein bar…" autocomplete="off">
+        <input type="search" id="qIn" placeholder="rokeby protein, chicken breast, oats…" autocomplete="off">
         <button class="btn" id="qGo">Go</button>
       </div>
-      <div class="hint">Built-in foods appear instantly. Online results come from USDA and Open Food Facts.</div>
+      <div class="hint">Type a brand and a product in any order — "rokeby protein" finds a Rokeby drink whether the brand is in the name or not. Saved and built-in foods appear as you type; online results follow a moment later.</div>
       <div id="qRes"></div>
       <div class="sp"></div>
       <button class="btn ghost wide" id="qManual">Enter macros manually</button>
@@ -178,39 +178,69 @@ const FoodView = (() => {
       const res   = body.querySelector('#qRes');
       input.focus();
 
-      const showLocal = () => paintResults(res, Nutrition.searchLocal(input.value), date, meal);
-      let t = 0;
-      input.addEventListener('input', () => { clearTimeout(t); t = setTimeout(showLocal, 120); });
+      let localTimer = 0, remoteTimer = 0, seq = 0;
 
-      const go = async () => {
+      const showLocal = () => {
+        const found = Nutrition.searchLocal(input.value);
+        if(found.length) paintResults(res, found, date, meal, input.value);
+      };
+
+      // Search online by itself. Nobody should have to find and press a
+      // button to look up a drink they are holding.
+      const go = async (auto) => {
         const q = input.value.trim();
-        if(q.length < 2) return toast('Type at least 2 characters');
-        res.innerHTML = `<div class="empty">Searching…</div>`;
+        if(q.length < 2){
+          if(!auto) toast('Type at least 2 characters');
+          return;
+        }
+        const mine = ++seq;
+        const local = Nutrition.searchLocal(q);
+        paintResults(res, local, date, meal, q, 'Searching online…');
         try{
-          paintResults(res, await Nutrition.search(q), date, meal);
+          const all = await Nutrition.search(q);
+          if(mine !== seq) return;               // a newer keystroke won
+          paintResults(res, all, date, meal, q);
         }catch(e){
-          paintResults(res, Nutrition.searchLocal(q), date, meal);
-          toast('Offline — showing built-in foods only');
+          if(mine !== seq) return;
+          paintResults(res, local, date, meal, q, null, 'Offline — showing saved and built-in foods only');
         }
       };
-      body.querySelector('#qGo').onclick = go;
-      input.addEventListener('keydown', e => { if(e.key === 'Enter') go(); });
-      body.querySelector('#qManual').onclick = () => openManualFood(date, meal, '', null);
+
+      input.addEventListener('input', () => {
+        clearTimeout(localTimer); clearTimeout(remoteTimer);
+        localTimer  = setTimeout(showLocal, 120);
+        remoteTimer = setTimeout(() => go(true), 650);
+      });
+      body.querySelector('#qGo').onclick = () => go(false);
+      input.addEventListener('keydown', e => { if(e.key === 'Enter'){ clearTimeout(remoteTimer); go(false); } });
+      body.querySelector('#qManual').onclick = () => openManualFood(date, meal, '', null, input.value.trim());
     });
   }
 
-  function paintResults(container, foods, date, meal){
+  function paintResults(container, foods, date, meal, query, busy, note){
     if(!foods.length){
-      container.innerHTML = `<div class="empty">No matches. Try the manual entry button.</div>`;
+      container.innerHTML = busy
+        ? `<div class="empty">${esc(busy)}</div>`
+        : `<div class="empty" style="text-align:left;line-height:1.6">
+             Nothing found for <b>${esc(query || '')}</b>.<br>
+             Regional and small brands are often missing from the databases.
+             Enter it once below and it is yours from then on.
+           </div>`;
       return;
     }
-    container.innerHTML = foods.map((f,i) => `
-      <div class="item" data-i="${i}" style="cursor:pointer">
-        <div class="grow">
-          <div class="t">${esc(f.name)}</div>
-          <div class="s">${f.brand ? esc(f.brand) + ' · ' : ''}${Math.round(f.kcal)} kcal · P${f.p} C${f.c} F${f.f} <span class="tag">${esc(f.source||'')}</span></div>
-        </div>
-      </div>`).join('');
+    const per = f => f.unit === 'serving' ? 'per serving' : 'per 100 g';
+    container.innerHTML =
+      (busy ? `<div class="tiny muted" style="padding:8px 0">${esc(busy)}</div>` : '') +
+      (note ? `<div class="tiny muted" style="padding:8px 0">${esc(note)}</div>` : '') +
+      foods.map((f,i) => `
+        <div class="item" data-i="${i}" style="cursor:pointer">
+          <div class="grow">
+            <div class="t">${esc(f.name)}</div>
+            <div class="s">${f.brand ? esc(f.brand) + ' · ' : ''}${Math.round(f.kcal)} kcal · P${f.p} C${f.c} F${f.f} ${per(f)}${
+              f.serving && f.serving !== 100 ? ` · serving ${round(f.serving,0)} g` : ''}
+              <span class="tag">${esc(f.source||'')}</span></div>
+          </div>
+        </div>`).join('');
     container.querySelectorAll('.item').forEach(el => {
       el.onclick = () => openPortion(date, meal, foods[+el.dataset.i]);
     });
@@ -332,12 +362,12 @@ const FoodView = (() => {
 
   /* ---------------- manual food (barcode miss / homemade) ---------------- */
 
-  function openManualFood(date, meal, barcode, partial){
+  function openManualFood(date, meal, barcode, partial, prefillName){
     openSheet(`
       <h2>${barcode ? 'Not in the database' : 'Enter macros manually'}</h2>
       ${barcode ? `<div class="hint" style="margin-top:-4px">Barcode ${esc(barcode)} has no usable nutrition data. Copy the numbers off the label — it will be saved, so the next scan of this product is instant.</div>` : ''}
       <div class="sp"></div>
-      <label class="f"><span>Name</span><input type="text" id="nIn" value="${esc(partial?.name || '')}" placeholder="e.g. Protein bar, cookies &amp; cream"></label>
+      <label class="f"><span>Name</span><input type="text" id="nIn" value="${esc(partial?.name || prefillName || '')}" placeholder="e.g. Rokeby protein drink"></label>
       <label class="f"><span>Brand or stall (optional)</span><input type="text" id="bIn" value="${esc(partial?.brand || '')}"></label>
 
       <div class="small muted" style="margin-bottom:6px">These numbers are…</div>

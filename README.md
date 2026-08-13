@@ -135,6 +135,18 @@ instant and works offline. If a product isn't in the database, or has no
 nutrition data, you get a manual-entry form pre-filled with whatever was known;
 saved products are reused on the next scan.
 
+Search matches **words, not substrings**. The query is split into tokens and
+each is looked for anywhere in the product name or the brand, so "rokeby
+protein", "protein rokeby" and "Rokeby Farms protein" all find a drink whose
+name is *Protein Drink* and whose brand is *Rokeby Farms* — a plain
+`includes()` finds none of them. Results are ranked: matching every word beats
+matching some, a name match beats a brand-only match, and your own saved foods
+outrank an identical remote result. If nothing matches every word the search
+loosens to half, and no further — one word out of three is noise.
+
+Online search runs by itself a beat after you stop typing, so no button press
+is needed, and a stale response can never overwrite a newer one.
+
 Text search checks the built-in table first (instant, offline, and more
 accurate than crowd-sourced entries for raw foods like chicken and rice), then
 USDA FoodData Central if you add a free API key in Progress → Targets, then

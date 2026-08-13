@@ -116,25 +116,86 @@ const Nutrition = (() => {
     return (res.foods || []).map(fromUSDA).filter(isUsable);
   }
 
+  /* ---------- matching ----------
+     Substring matching fails the common case: you remember the brand and
+     roughly what the thing was, in whatever order it comes to you.
+     "rokeby protein" has to find "Protein Drink" by "Rokeby Farms", and
+     a plain includes() never will. So the query is split into tokens and
+     each one is looked for anywhere in the name or the brand. */
+
+  function tokenize(q){
+    return String(q || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9%\s.]/g, ' ')   // punctuation is noise in food names
+      .split(/\s+/)
+      .filter(t => t.length > 0);
+  }
+
+  /* 0 means no match at all. Higher is a better match. */
+  function score(food, tokens){
+    if(!tokens.length) return 0;
+    const name  = (food.name  || '').toLowerCase();
+    const brand = (food.brand || '').toLowerCase();
+    const hay   = name + ' ' + brand;
+
+    let matched = 0, inName = 0;
+    for(const t of tokens){
+      if(hay.includes(t)){
+        matched++;
+        if(name.includes(t)) inName++;
+      }
+    }
+    if(!matched) return 0;
+
+    // How much of what you typed was found dominates everything else.
+    let s = (matched / tokens.length) * 100;
+    s += inName * 6;                                  // name beats brand-only
+    if(name.startsWith(tokens[0])) s += 12;           // leading match reads as "the" result
+    if(food.serving && food.serving !== 100) s += 6;  // a real serving size is useful
+    if(TRUSTED.has(food.source)) s += 8;              // your own and built-in entries first
+    s -= Math.min(name.length / 12, 6);               // prefer the concise name of two
+    return round(s, 2);
+  }
+
+  const TRUSTED = new Set(['Saved by you', 'Built-in', 'Per serving', 'Your usual']);
+
+  /* A score of 100 means every word was found. The loose pass needs at
+     least half of them — one word out of three is noise, not a match:
+     "zzzq nonexistent drink" should not return every drink in the table. */
+  function rank(foods, tokens, { partial = false, min } = {}){
+    const floor = min != null ? min : (partial ? 50 : 100);
+    return foods
+      .map(f => ({ f, s: score(f, tokens) }))
+      .filter(x => x.s >= floor)
+      .sort((a, b) => b.s - a.s)
+      .map(x => x.f);
+  }
+
   /* ---------- local table ---------- */
 
-  function searchLocal(q){
-    const s = q.toLowerCase().trim();
-    if(!s) return [];
-    const pool = Store.state.customFoods.concat(
+  function localPool(){
+    return Store.state.customFoods.concat(
       LOCAL_FOODS.map(f => Object.assign({}, f, { serving:100, servingLabel:'100 g', source:'Built-in' })),
       SERVING_FOODS.map(f => Object.assign({}, f, { unit:'serving', serving:100,
                                                     servingLabel:'1 serving', source:'Per serving' }))
     );
-    return pool
-      .filter(f => (f.name + ' ' + (f.brand||'')).toLowerCase().includes(s))
-      .sort((a,b) => a.name.toLowerCase().indexOf(s) - b.name.toLowerCase().indexOf(s))
-      .slice(0, 25);
+  }
+
+  function searchLocal(q){
+    const tokens = tokenize(q);
+    if(!tokens.length) return [];
+    // Strict first; if nothing matches every word, loosen rather than
+    // showing an empty list.
+    const strict = rank(localPool(), tokens);
+    return (strict.length ? strict : rank(localPool(), tokens, { partial:true })).slice(0, 25);
   }
 
   /* ---------- combined search ---------- */
 
   async function search(q){
+    const tokens = tokenize(q);
+    if(!tokens.length) return [];
+
     const local = searchLocal(q);
     let remote = [];
     try{
@@ -145,10 +206,13 @@ const Nutrition = (() => {
       remote = usda.concat(off);
     }catch(e){ /* offline: local results are still fine */ }
 
-    // De-duplicate by name+brand, local first (it is the trusted table).
+    // Remote results keep partial matches — the database's own relevance
+    // is worth something — but they rank below anything matching in full.
+    const ranked = rank(remote, tokens, { partial:true });
+
     const seen = new Set(), out = [];
-    for(const f of local.concat(remote)){
-      const k = (f.name + '|' + (f.brand||'')).toLowerCase();
+    for(const f of local.concat(ranked)){
+      const k = (f.name + '|' + (f.brand || '')).toLowerCase();
       if(seen.has(k)) continue;
       seen.add(k); out.push(f);
     }
@@ -187,5 +251,7 @@ const Nutrition = (() => {
     } finally { clearTimeout(t); }
   }
 
-  return { byBarcode, search, searchLocal, toEntry, fromOFF };
+  return { byBarcode, search, searchLocal, toEntry, fromOFF, tokenize, score, rank };
 })();
+
+if(typeof module !== 'undefined' && module.exports) module.exports = Nutrition;
