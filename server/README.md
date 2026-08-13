@@ -53,7 +53,16 @@ Delete everything in the editor and paste the whole contents of
 
 ## 5. Connect the storage to the Worker
 
-Worker → **Settings → Bindings → Add → KV namespace**.
+Direct (if you named the Worker `bruce-sync`):
+**<https://dash.cloudflare.com/?to=/:account/workers/services/view/bruce-sync/production/settings>**
+
+This is the **Worker's** Settings, not the account's — back out of the code
+editor first, then open the Worker and use the Settings tab along the top.
+
+Then, depending on how new your dashboard is:
+
+- **Bindings → Add → KV namespace**, or
+- **Variables → KV Namespace Bindings → Add binding**
 
 - **Variable name:** `SYNC` — exactly this, in capitals. The code looks for
   this name and nothing else.
