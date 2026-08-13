@@ -43,7 +43,11 @@ const TrainView = (() => {
     }
 
     html += `<div class="card">${cardHead('Session')}`;
-    (day.exercises || []).forEach((ex, i) => { html += exerciseCard(ex, i, date, sess); });
+    (day.exercises || []).forEach((ex, i) => {
+      const swapped = sess.swaps[ex.name];
+      const eff = swapped ? Object.assign({}, ex, { name:swapped }) : ex;
+      html += exerciseCard(ex, eff, date, sess);
+    });
     html += `
       ${day.finisher ? `<div class="hint">Finish: ${esc(day.finisher)}</div>` : ''}
       <div class="hr"></div>
@@ -61,23 +65,26 @@ const TrainView = (() => {
       <br>Log it on the Cardio tab.</div>`;
   }
 
-  function exerciseCard(ex, i, date, sess){
-    const saved = sess.exercises[ex.name] || Array.from({ length:ex.sets }, () => ({ w:'', r:'', done:false }));
+  function exerciseCard(ex, eff, date, sess){
+    const swapped = eff.name !== ex.name;
+    const saved = sess.exercises[eff.name] || Array.from({ length:ex.sets }, () => ({ w:'', r:'', done:false }));
     const allDone = saved.length && saved.every(s => s.done);
 
     // What to do today, worked out from what was logged last time.
-    const nt = Progression.nextTarget(ex, date);
+    const nt = Progression.nextTarget(eff, date);
     const last = nt.last;
     const wPlace = nt.res.weight ? nt.res.weight : 'kg';
     const rPlace = nt.res.reps != null ? nt.res.reps : (nt.res.target != null ? nt.res.target : 'reps');
 
     return `
-      <div class="ex${allDone ? ' done' : ''}" data-ex="${esc(ex.name)}">
+      <div class="ex${allDone ? ' done' : ''}" data-ex="${esc(eff.name)}" data-orig="${esc(ex.name)}">
         <div class="ex-h">
           <div class="grow">
-            <div class="n">${esc(ex.name)} ${ex.tag ? `<span class="tag ${ex.tag}">${ex.tag === 'core' ? 'core' : 'stability'}</span>` : ''}</div>
+            <div class="n">${esc(eff.name)} ${ex.tag ? `<span class="tag ${ex.tag}">${ex.tag === 'core' ? 'core' : 'stability'}</span>` : ''}</div>
             <div class="p">${ex.sets} × ${esc(ex.reps)}${ex.rest ? ` · ${ex.rest}s rest` : ''}</div>
+            ${swapped ? `<div class="p" style="color:var(--fg-2)">swapped from ${esc(ex.name)}</div>` : ''}
           </div>
+          <button class="iconbtn" data-act="swap" aria-label="Swap exercise">⇄</button>
           <button class="iconbtn" data-act="rest" data-sec="${ex.rest||90}" aria-label="Rest timer">◷</button>
         </div>
         <div class="target ${nt.tone}">${esc(nt.text)}</div>
@@ -159,6 +166,9 @@ const TrainView = (() => {
       card.querySelector('[data-act="rest"]')?.addEventListener('click', e => {
         startTimer(+e.currentTarget.dataset.sec || 90);
       });
+      card.querySelector('[data-act="swap"]')?.addEventListener('click', () => {
+        openSwap(date, card.dataset.orig, card.dataset.ex);
+      });
     });
 
     root.querySelector('#sessNote')?.addEventListener('change', e => {
@@ -170,6 +180,50 @@ const TrainView = (() => {
       App.refresh();
     });
     on(root, 'shift', () => openShift(date));
+  }
+
+  /* Equipment busy? Swap to something that trains the same pattern.
+     Today only — tomorrow's session goes back to the programmed lift. */
+  function openSwap(date, original, current){
+    const alts = altsFor(original);
+    const row = name => {
+      const last = Store.lastPerformance(name, addDays(date, 1));
+      const on = name === current;
+      return `<div class="item" data-name="${esc(name)}" style="cursor:pointer">
+        <div class="grow">
+          <div class="t">${esc(name)}${on ? ' <span class="tag">current</span>' : ''}</div>
+          <div class="s">${last
+            ? 'last: ' + last.sets.map(s => `${s.w ? s.w + 'kg × ' : ''}${s.r || '-'}`).join(', ')
+            : 'no history yet — first session sets your baseline'}</div>
+        </div>
+      </div>`;
+    };
+
+    openSheet(`
+      <h2>Swap ${esc(original)}</h2>
+      <div class="hint" style="margin-top:-6px">Same movement, different kit. This applies to today only, and each exercise keeps its own weight history — so a dumbbell version starts from its own numbers, not the barbell's.</div>
+      <div class="sp"></div>
+      ${current !== original ? `<button class="btn ghost wide" data-back style="margin-bottom:14px">Back to ${esc(original)}</button>` : ''}
+      ${alts.length ? alts.map(row).join('') : `<div class="empty">No alternatives listed for this one.</div>`}
+      <div class="hr"></div>
+      <label class="f"><span>Or something else entirely</span>
+        <input type="text" id="altOther" placeholder="e.g. Hammer Strength Incline Press"></label>
+      <button class="btn wide" id="altGo">Use that</button>
+    `, body => {
+      const pick = name => {
+        Store.setSwap(date, original, name === original ? null : name);
+        closeSheet();
+        toast(name === original ? 'Back to ' + original : 'Swapped to ' + name);
+        App.refresh();
+      };
+      body.querySelectorAll('.item').forEach(el => el.onclick = () => pick(el.dataset.name));
+      body.querySelector('[data-back]')?.addEventListener('click', () => pick(original));
+      body.querySelector('#altGo').onclick = () => {
+        const v = body.querySelector('#altOther').value.trim();
+        if(!v) return toast('Type an exercise name');
+        pick(v);
+      };
+    });
   }
 
   /* Let him re-anchor the rotation when life gets in the way. */

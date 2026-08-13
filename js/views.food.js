@@ -24,12 +24,14 @@ const FoodView = (() => {
         ${proteinLeft > 0 ? `<div class="hint">${proteinLeft} g of protein still to go${proteinHint(proteinLeft)}</div>` : ''}
       </div>
 
+      ${usualCard(date)}
+
       <div class="card">
-        ${cardHead('Your meals')}
+        ${cardHead('Starting meals')}
         <div class="chips">
           ${PRESET_MEALS.map((m,i) => `<button class="chip" data-act="preset" data-i="${i}">${esc(m.name)}</button>`).join('')}
         </div>
-        <div class="hint">Tap to log the whole meal, then adjust any item.</div>
+        <div class="hint">The plan's meals. Tap one to review the items, untick anything you did not have, then log.</div>
       </div>
     `;
 
@@ -65,6 +67,24 @@ const FoodView = (() => {
     wire(root, date);
   }
 
+  /* "Your usual X" — learned from what has actually been logged. */
+  function usualCard(date){
+    const found = MEALS
+      .map(m => ({ meal:m, usual:Store.usualMeal(m.key, date) }))
+      .filter(x => x.usual);
+    if(!found.length) return '';
+
+    return `
+      <div class="card">
+        ${cardHead('Your usual')}
+        <div class="chips">
+          ${found.map(x => `<button class="chip" data-act="usual" data-meal="${x.meal.key}">
+            ${esc(x.meal.label)} ${badge(x.usual.items.length)}</button>`).join('')}
+        </div>
+        <div class="hint">Learned from your own log — the foods you eat most in each meal, at your usual amounts. Tap to review and log.</div>
+      </div>`;
+  }
+
   function proteinHint(left){
     if(left >= 45) return ' — that is roughly 150 g of chicken or two scoops of whey.';
     if(left >= 20) return ' — 200 g of Greek yogurt or one scoop of whey covers it.';
@@ -90,6 +110,7 @@ const FoodView = (() => {
     on(root, 'search', el => openSearch(date, el.dataset.meal || guessMeal()));
     on(root, 'quick',  el => openRecent(date, el.dataset.meal || guessMeal()));
     on(root, 'preset', el => addPreset(date, +el.dataset.i));
+    on(root, 'usual',  el => addUsual(date, el.dataset.meal));
     on(root, 'delEntry', el => { Store.removeEntry(date, el.dataset.id); App.refresh(); });
     on(root, 'editEntry', el => editEntry(date, el.dataset.id));
     on(root, 'saveWeight', () => {
@@ -188,15 +209,21 @@ const FoodView = (() => {
   /* ---------------- recent ---------------- */
 
   function openRecent(date, meal){
-    const recents = Store.recentFoods(20);
+    // Ranked by how often it appears in THIS meal, then by recency —
+    // your breakfast list should be breakfast foods.
+    const freq = Store.frequentFoods(meal, 20);
+    const recents = (freq.length ? freq : Store.frequentFoods(null, 20)).map(f => f.entry);
+    const counts  = (freq.length ? freq : Store.frequentFoods(null, 20)).map(f => f.count);
     if(!recents.length) return openSearch(date, meal);
     openSheet(`
-      <h2>Recent foods</h2>
+      <h2>Your foods</h2>
+      <div class="hint" style="margin-top:-6px">Most logged first.</div>
+      <div class="sp"></div>
       ${recents.map((e,i) => `
         <div class="item" data-i="${i}" style="cursor:pointer">
           <div class="grow">
             <div class="t">${esc(e.name)}</div>
-            <div class="s">last logged at ${round(e.grams,0)} g · ${Math.round(e.kcal)} kcal</div>
+            <div class="s">${counts[i]}× · usually ${round(e.grams,0)} g · ${Math.round(e.kcal)} kcal</div>
           </div>
         </div>`).join('')}
     `, body => {
@@ -327,19 +354,103 @@ const FoodView = (() => {
     });
   }
 
-  /* ---------------- preset meals ---------------- */
+  /* ---------------- preset + usual meals ----------------
+     Both go through the same review sheet, so a meal you did not eat
+     exactly as usual — no honey today — is one tap to correct before
+     anything is logged. */
 
   function addPreset(date, i){
     const preset = PRESET_MEALS[i];
-    let added = 0;
-    for(const it of preset.items){
-      const f = localFood(it.food);
-      if(!f) continue;
-      Store.addEntry(date, Nutrition.toEntry(Object.assign({ source:'Built-in' }, f), it.grams, preset.meal));
-      added++;
-    }
-    toast(added + ' items added to ' + preset.meal);
-    App.refresh();
+    const items = preset.items
+      .map(it => {
+        const f = localFood(it.food);
+        return f ? Object.assign({}, f, { grams:it.grams, source:'Built-in' }) : null;
+      })
+      .filter(Boolean);
+    openMealReview(date, preset.meal, preset.name, items, '');
+  }
+
+  function addUsual(date, mealKey){
+    const usual = Store.usualMeal(mealKey, date);
+    if(!usual) return toast('Not enough history for this meal yet');
+    const label = MEALS.find(m => m.key === mealKey).label;
+    openMealReview(date, mealKey, 'Usual ' + label.toLowerCase(), usual.items,
+                   `Built from your last ${usual.mealDays} logged ${label.toLowerCase()}s.`);
+  }
+
+  /* items are per-100g foods carrying a suggested `grams`. */
+  function openMealReview(date, mealKey, title, items, subtitle){
+    if(!items.length) return toast('Nothing to add');
+
+    openSheet(`
+      <h2>${esc(title)}</h2>
+      <div class="hint" style="margin-top:-6px">${esc(subtitle || 'Untick anything you did not have, or change the amounts.')}</div>
+      <div class="sp"></div>
+      ${items.map((f, i) => `
+        <div class="pickrow" data-i="${i}">
+          <button class="pick on" data-act="toggle" aria-label="Include ${esc(f.name)}">✓</button>
+          <div class="grow">
+            <div class="t">${esc(f.name)}</div>
+            <div class="s">${f.brand ? esc(f.brand) + ' · ' : ''}${f.count ? f.count + ' times · ' : ''}<span class="rowmacros"></span></div>
+          </div>
+          <input type="number" class="g" inputmode="decimal" value="${round(f.grams, 0)}" aria-label="grams">
+        </div>`).join('')}
+      <div class="hr"></div>
+      <div class="row between" style="margin-bottom:14px">
+        <span class="small muted">Total</span>
+        <b class="mono" id="revTotal"></b>
+      </div>
+      <div class="row" style="gap:8px">
+        <button class="btn ghost" id="revCancel">Cancel</button>
+        <button class="btn grow" id="revAdd"></button>
+      </div>
+    `, body => {
+      const rows = [...body.querySelectorAll('.pickrow')];
+
+      const chosen = () => rows
+        .filter(r => r.querySelector('.pick').classList.contains('on'))
+        .map(r => ({ food: items[+r.dataset.i], grams: parseFloat(r.querySelector('.g').value) || 0 }))
+        .filter(x => x.grams > 0);
+
+      const paint = () => {
+        for(const r of rows){
+          const f = items[+r.dataset.i];
+          const g = parseFloat(r.querySelector('.g').value) || 0;
+          const e = Nutrition.toEntry(f, g, mealKey);
+          r.querySelector('.rowmacros').textContent =
+            `${Math.round(e.kcal)} kcal · P${round(e.p, 1)}`;
+        }
+        const t = chosen().reduce((a, x) => {
+          const e = Nutrition.toEntry(x.food, x.grams, mealKey);
+          a.kcal += e.kcal; a.p += e.p; return a;
+        }, { kcal:0, p:0 });
+        body.querySelector('#revTotal').textContent =
+          `${Math.round(t.kcal)} kcal · ${Math.round(t.p)} g protein`;
+        body.querySelector('#revAdd').textContent =
+          chosen().length ? `Add ${chosen().length} item${chosen().length > 1 ? 's' : ''}` : 'Nothing selected';
+        body.querySelector('#revAdd').disabled = !chosen().length;
+      };
+
+      for(const r of rows){
+        r.querySelector('[data-act="toggle"]').onclick = () => {
+          r.querySelector('.pick').classList.toggle('on');
+          r.classList.toggle('off', !r.querySelector('.pick').classList.contains('on'));
+          paint();
+        };
+        r.querySelector('.g').addEventListener('input', paint);
+      }
+      paint();
+
+      body.querySelector('#revCancel').onclick = closeSheet;
+      body.querySelector('#revAdd').onclick = () => {
+        const picked = chosen();
+        if(!picked.length) return;
+        for(const x of picked) Store.addEntry(date, Nutrition.toEntry(x.food, x.grams, mealKey));
+        closeSheet();
+        toast(picked.length + ' items added');
+        App.refresh();
+      };
+    });
   }
 
   return { render };

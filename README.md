@@ -30,8 +30,18 @@ prescribed so far this cycle), plus protein adherence. Everything is derived
 from what you already log — no extra tracking.
 
 **Food** — daily calories and macros against your targets, split by meal.
-Log food by scanning a barcode, searching, or tapping one of your four preset
-meals. Bodyweight goes in here too.
+Log food by scanning a barcode, searching, or tapping a meal. Bodyweight goes
+in here too.
+
+**Your usual** — the app learns each meal from your own log. A food joins your
+"usual breakfast" once it appears on at least 2 of your logged breakfasts and
+in at least 40% of them, suggested at the **median** amount so one unusual day
+does not drag it around. Tapping a usual meal — or one of the plan's starting
+meals — opens a review sheet: every item is pre-ticked with its amount, and you
+untick anything you did not have (no honey today) or edit the grams before
+anything is written to the log. The running total updates as you go. Thresholds
+are `MIN_DAYS` / `MIN_FREQ` / `LOOKBACK` at the top of the learned-meals section
+in `js/store.js`.
 
 **Train** — today's session pulled from the 9-day rotation, with weight × reps ×
 RPE per set, what you lifted for that exercise last time, and a rest timer that
@@ -46,6 +56,13 @@ it prescribes a 10% cut instead. The target weight and reps appear as greyed
 placeholders in the set fields, so the numbers are already in front of you.
 Bodyweight work progresses on reps or time; pull-ups are scored on total reps;
 every 6th cycle is flagged as a deload.
+
+**Swapping exercises** — machine or bench taken? The ⇄ button on any exercise
+offers alternatives that train the same pattern (`ALTERNATIVES` in
+`js/data.js` — 45 exercises, 143 alternatives), or you can type your own. The
+swap applies to that day only, and the replacement keeps its **own** weight
+history, because a dumbbell incline press is not the same load as a Smith
+incline press and the progression must not pretend otherwise.
 
 **Cardio** — run/walk log with automatic pace, plus a 7-day-vs-previous-7-day
 load comparison that warns you when mileage is climbing faster than your

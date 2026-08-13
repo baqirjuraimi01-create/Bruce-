@@ -130,6 +130,76 @@ const PROGRAM = [
   }
 ];
 
+/* ==================================================================
+   EXERCISE ALTERNATIVES
+   For when the rack, bench or machine is taken. Each swap trains the
+   same pattern with different equipment, so the session still does its
+   job. Swapped lifts keep their own weight history — a dumbbell incline
+   press is not the same load as a Smith incline press, and the app
+   should never pretend otherwise.
+================================================================== */
+
+const ALTERNATIVES = {
+  /* --- push --- */
+  'Barbell Bench Press':            ['Dumbbell Bench Press','Smith Machine Bench Press','Machine Chest Press','Weighted Dip'],
+  'Incline Dumbbell Press':         ['Incline Barbell Press','Smith Machine Incline Press','Incline Machine Press','Low-to-high Cable Fly'],
+  'Standing Overhead Press':        ['Seated Dumbbell Press','Push Press','Machine Shoulder Press','Landmine Press'],
+  'Cable Lateral Raise':            ['Dumbbell Lateral Raise','Machine Lateral Raise','Lean-away Dumbbell Raise'],
+  'Overhead Cable Triceps Ext':     ['Overhead Dumbbell Extension','EZ Bar Skullcrusher','Rope Pushdown'],
+  'Dips or Triceps Pushdown':       ['Weighted Dip','Bench Dip','Close-grip Push-up','Rope Pushdown'],
+  'Ab Wheel Rollout':               ['Cable Rollout','TRX Fallout','Long-lever Plank'],
+  'Long-lever Plank':               ['Hardstyle Plank','Ab Wheel Rollout','Dead Bug'],
+
+  /* --- pull --- */
+  'Weighted Pull-up / Lat Pulldown':['Lat Pulldown','Assisted Pull-up','Neutral-grip Pull-up','Straight-arm Pulldown'],
+  'Chest-supported Row':            ['Seated Cable Row','Machine Row','Single-arm Dumbbell Row','T-bar Row'],
+  'Half-kneeling 1-arm Cable Row':  ['Single-arm Dumbbell Row','Half-kneeling Landmine Row','Banded Single-arm Row'],
+  'Face Pull':                      ['Reverse Pec Deck','Band Pull-apart','Rear Delt Fly'],
+  'Incline Dumbbell Curl':          ['EZ Bar Curl','Cable Curl','Machine Curl'],
+  'Hammer Curl':                    ['Rope Hammer Curl','Cross-body Curl','Reverse Curl'],
+  'Pallof Press':                   ['Banded Pallof Press','Half-kneeling Cable Hold','Landmine Rotation'],
+  'Suitcase Carry':                 ["Farmer's Carry",'Single-arm Rack Carry','Heavy Dumbbell Hold'],
+
+  /* --- legs --- */
+  'Back Squat':                     ['Front Squat','Hack Squat','Leg Press','Safety Bar Squat','Goblet Squat'],
+  'Romanian Deadlift':              ['Dumbbell RDL','Good Morning','45° Back Extension','Hip Thrust'],
+  'Bulgarian Split Squat':          ['Reverse Lunge','Walking Lunge','Split Squat','Single-leg Leg Press'],
+  'Single-leg Leg Curl / Nordic':   ['Seated Leg Curl','Lying Leg Curl','Nordic Curl','Slider Leg Curl'],
+  'Standing Calf Raise':            ['Seated Calf Raise','Leg Press Calf Raise','Smith Machine Calf Raise'],
+  'Tibialis Raise':                 ['Banded Dorsiflexion','Toe Raise off a Step','Heel Walk'],
+  'Copenhagen Plank':               ['Adductor Machine','Short-lever Copenhagen','Cossack Squat'],
+  'Dead Bug':                       ['Bird Dog','Hollow Hold','Slow Leg Lowering'],
+
+  /* --- upper --- */
+  'Incline Bench Press':            ['Incline Dumbbell Press','Smith Machine Incline Press','Incline Machine Press'],
+  'Pull-up':                        ['Lat Pulldown','Assisted Pull-up','Inverted Row'],
+  'Seated Dumbbell Press':          ['Machine Shoulder Press','Arnold Press','Standing Overhead Press'],
+  'Cable Row':                      ['Chest-supported Row','Machine Row','Single-arm Dumbbell Row'],
+  'Lateral Raise':                  ['Cable Lateral Raise','Machine Lateral Raise','Lean-away Dumbbell Raise'],
+  'Rear Delt Fly':                  ['Face Pull','Reverse Pec Deck','Band Pull-apart'],
+  'Hanging Leg Raise':              ["Captain's Chair Knee Raise",'Lying Leg Raise','Hanging Knee Raise'],
+  'Side Plank with Reach':          ['Side Plank','Suitcase Carry','Pallof Press'],
+
+  /* --- arms + lower stability --- */
+  'Slow Step-up (knee over toe)':   ['Reverse Lunge','Split Squat','Single-leg Leg Press'],
+  'Reverse Lunge':                  ['Walking Lunge','Split Squat','Slow Step-up (knee over toe)'],
+  'Single-leg Calf Raise':          ['Standing Calf Raise','Leg Press Calf Raise','Seated Calf Raise'],
+  'Banded Ankle Eversion':          ['Cable Ankle Eversion','Side-lying Ankle Eversion'],
+  'EZ Bar Curl':                    ['Barbell Curl','Cable Curl','Dumbbell Curl'],
+  'Incline / Preacher Curl':        ['Preacher Machine Curl','Spider Curl','Cable Curl'],
+  'Close-grip Bench or Dips':       ['Weighted Dip','EZ Bar Skullcrusher','JM Press'],
+  'Cable Pushdown':                 ['Rope Pushdown','Overhead Dumbbell Extension','Bench Dip'],
+  'Weighted Plank':                 ['Long-lever Plank','Ab Wheel Rollout','Hollow Hold'],
+  'Hollow Hold':                    ['Dead Bug','Slow Leg Lowering','Hanging Knee Raise'],
+
+  /* --- run-day stability --- */
+  'Single-leg Stance, Eyes Closed': ['Single-leg Stance on a Cushion','Single-leg Reach'],
+  'Single-leg RDL (bodyweight)':    ['Dumbbell Single-leg RDL','Kickstand RDL'],
+  'Lateral Band Walk':              ['Cable Hip Abduction','Abductor Machine','Monster Walk']
+};
+
+function altsFor(name){ return ALTERNATIVES[name] || []; }
+
 /* Progression rules shown in the app so you are never guessing. */
 const PROGRESSION = [
   'Double progression: stay at the same weight until you hit the TOP of the rep range on every set, then add 2.5 kg (upper body) or 5 kg (lower body).',

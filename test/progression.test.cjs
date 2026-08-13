@@ -44,6 +44,43 @@ console.log('\n— every exercise in the program parses to something usable —'
   eq(`${reps.length} prescriptions, none unparsed`, bad, []);
 }
 
+console.log('\n— exercise alternatives —');
+{
+  const fs = require('fs'), vm = require('vm');
+  const ctx = { console };
+  vm.createContext(ctx);
+  // top-level `const` is lexical, not a context property — export explicitly
+  vm.runInContext(fs.readFileSync(__dirname + '/../js/data.js', 'utf8') +
+    ';globalThis.D = { PROGRAM, ALTERNATIVES, altsFor };', ctx);
+  const D = ctx.D;
+
+  // Mobility and stretching do not need equipment swaps; loaded work does.
+  const MOBILITY = /stretch|foam roll|hip switch|dorsiflexion rock/i;
+  const lifting = [];
+  for(const day of D.PROGRAM)
+    for(const ex of (day.exercises || []))
+      if(!MOBILITY.test(ex.name)) lifting.push(ex.name);
+
+  const missing = [...new Set(lifting)].filter(n => D.altsFor(n).length === 0);
+  eq(`${new Set(lifting).size} loaded exercises all have alternatives`, missing, []);
+
+  // Alternatives must not point back at the exercise itself.
+  const selfRef = Object.keys(D.ALTERNATIVES).filter(k => D.ALTERNATIVES[k].includes(k));
+  eq('no exercise lists itself as its own alternative', selfRef, []);
+
+  // Every alternative should be a real, non-empty name.
+  const bad = [];
+  for(const k in D.ALTERNATIVES)
+    for(const a of D.ALTERNATIVES[k])
+      if(typeof a !== 'string' || !a.trim()) bad.push(k);
+  eq('all alternatives are named', bad, []);
+
+  const counts = Object.values(D.ALTERNATIVES).map(a => a.length);
+  console.log(`         ${Object.keys(D.ALTERNATIVES).length} exercises, ` +
+              `${counts.reduce((a,b)=>a+b,0)} alternatives, ` +
+              `${Math.min(...counts)}-${Math.max(...counts)} each`);
+}
+
 console.log('\n— plan: the double-progression decision —');
 const r58 = P.parseReps('5-8');
 

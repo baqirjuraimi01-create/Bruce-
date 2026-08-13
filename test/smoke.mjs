@@ -42,18 +42,93 @@ await check('manual step entry', async () => {
 });
 
 console.log('— food tab —');
-await check('preset meal logs items', async () => {
+await check('preset opens a review sheet, then logs the ticked items', async () => {
   await page.click('[data-tab="food"]');
   await page.waitForTimeout(200);
   await page.click('[data-act="preset"][data-i="0"]');
+  await page.waitForTimeout(300);
+  const rows = await page.$$eval('.pickrow', e => e.length);
+  if(rows !== 5) throw new Error('expected 5 reviewable items, got ' + rows);
+  console.log('       review sheet: ' + (await page.textContent('#revAdd')).trim() +
+              ', total ' + (await page.textContent('#revTotal')).trim());
+  await page.click('#revAdd');
+  await page.waitForTimeout(300);
+  if(!/Oats, dry/.test(await page.textContent('#view'))) throw new Error('oats not logged');
+});
+
+await check('unticking an item keeps it out of the log', async () => {
+  const honeyBefore = await page.evaluate(() =>
+    Store.day(today()).entries.filter(e => /honey/i.test(e.name)).length);
+  await page.click('[data-act="preset"][data-i="0"]');
+  await page.waitForTimeout(300);
+  const idx = await page.$$eval('.pickrow', els => els.findIndex(e => /honey/i.test(e.textContent)));
+  if(idx < 0) throw new Error('no honey row in the sheet');
+  await page.locator('.pickrow').nth(idx).locator('.pick').click();
+  await page.waitForTimeout(200);
+  const label = (await page.textContent('#revAdd')).trim();
+  if(!/Add 4 items/.test(label)) throw new Error('button read: ' + label);
+  await page.click('#revAdd');
+  await page.waitForTimeout(300);
+  const honeyAfter = await page.evaluate(() =>
+    Store.day(today()).entries.filter(e => /honey/i.test(e.name)).length);
+  if(honeyAfter !== honeyBefore) throw new Error(`honey went ${honeyBefore} -> ${honeyAfter}`);
+  console.log('       4 of 5 logged, honey excluded');
+});
+
+await check('review sheet respects an edited amount', async () => {
+  await page.click('[data-act="preset"][data-i="3"]');
+  await page.waitForTimeout(300);
+  const first = page.locator('.pickrow').first();
+  await first.locator('.g').fill('50');
   await page.waitForTimeout(150);
-  const txt = await page.textContent('#view');
-  if(!/Oats, dry/.test(txt)) throw new Error('oats not logged');
+  // untick everything except the first row
+  const n = await page.locator('.pickrow').count();
+  for(let i = 1; i < n; i++) await page.locator('.pickrow').nth(i).locator('.pick').click();
+  await page.waitForTimeout(150);
+  await page.click('#revAdd');
+  await page.waitForTimeout(300);
+  const g = await page.evaluate(() => {
+    const es = Store.day(today()).entries;
+    return es[es.length-1].grams;
+  });
+  if(g !== 50) throw new Error('logged ' + g + ' g, expected 50');
+});
+
+await check('"your usual" appears once there is history', async () => {
+  await page.evaluate(() => {
+    // three past breakfasts: oats + whey every time, honey only once
+    const mk = (n, extra) => { const d = new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); };
+    for(const n of [1,2,3]){
+      const d = mk(n);
+      Store.state.days[d] = { entries:[
+        { id:'a'+n, name:'Oats, dry/raw', brand:'', grams:80, kcal:303, p:10.6, c:54.2, f:5.2, meal:'breakfast' },
+        { id:'b'+n, name:'Whey protein powder', brand:'', grams:30, kcal:120, p:24, c:2.4, f:1.8, meal:'breakfast' }
+      ], weight:null, steps:null, note:'' };
+      if(n === 1) Store.state.days[d].entries.push(
+        { id:'c'+n, name:'Honey', brand:'', grams:20, kcal:61, p:0.1, c:16.5, f:0, meal:'breakfast' });
+    }
+    Store.save();
+  });
+  await page.click('[data-tab="home"]'); await page.waitForTimeout(150);
+  await page.click('[data-tab="food"]'); await page.waitForTimeout(300);
+  if(!/Your usual/.test(await page.textContent('#view'))) throw new Error('no usual card');
+  await page.click('[data-act="usual"][data-meal="breakfast"]');
+  await page.waitForTimeout(300);
+  const names = await page.$$eval('.pickrow .t', e => e.map(x => x.textContent.trim()));
+  if(!names.includes('Oats, dry/raw') || !names.includes('Whey protein powder'))
+    throw new Error('usual missed a staple: ' + names.join(', '));
+  if(names.includes('Honey'))
+    throw new Error('one-off honey should not count as usual: ' + names.join(', '));
+  console.log('       learned: ' + names.join(', ') + ' (honey correctly excluded as a one-off)');
+  await page.click('#revCancel');
+  await page.waitForTimeout(200);
 });
 await check('macros update after preset', async () => {
   const kcal = await page.textContent('.kcal-big');
-  if(parseInt(kcal) < 300) throw new Error('kcal = ' + kcal);
-  console.log('       breakfast preset =', kcal.trim(), 'kcal');
+  // the donut formats with thousands separators, so strip them before parsing
+  const n = parseInt(kcal.replace(/[^0-9]/g, ''), 10);
+  if(!(n >= 300)) throw new Error('kcal = ' + kcal.trim() + ' -> ' + n);
+  console.log('       logged so far =', n, 'kcal');
 });
 await check('protein number is sane for breakfast preset', async () => {
   const rows = await page.$$eval('.stat', els => els.map(e => e.textContent.replace(/\s+/g,' ').trim()));
@@ -138,6 +213,48 @@ await check('volume card computes', async () => {
   if(!m) throw new Error('no volume card');
   console.log('       volume:', m[1], 'kg');
 });
+await check('swapping an exercise when the kit is busy', async () => {
+  const card = page.locator('.ex').nth(1);
+  const original = (await card.locator('.n').textContent()).trim();
+  await card.locator('[data-act="swap"]').click();
+  await page.waitForTimeout(300);
+  const alts = await page.$$eval('.sheet .item .t', e => e.map(x => x.textContent.trim()));
+  if(alts.length < 2) throw new Error('no alternatives offered');
+  console.log('       ' + original + ' -> ' + alts.slice(0,3).join(' / ') + ' …');
+  await page.locator('.sheet .item').first().click();
+  await page.waitForTimeout(300);
+  const now = (await page.locator('.ex').nth(1).locator('.n').textContent()).trim();
+  if(now === original) throw new Error('card did not change');
+  if(!/swapped from/.test(await page.locator('.ex').nth(1).textContent())) throw new Error('no provenance shown');
+});
+
+await check('a swapped lift logs under its own name and history', async () => {
+  const card = page.locator('.ex').nth(1);
+  const name = (await card.locator('.n').textContent()).trim().replace(/\s+/g,' ');
+  await card.locator('.setrow').nth(0).locator('.w').fill('24');
+  await card.locator('.setrow').nth(0).locator('.r').fill('10');
+  await card.locator('.setrow').nth(0).locator('.tick').click();
+  await page.waitForTimeout(300);
+  const keys = await page.evaluate(() => Object.keys(Store.session(today()).exercises));
+  if(!keys.some(k => name.startsWith(k) || k === name.split(' current')[0]))
+    throw new Error('logged under: ' + keys.join(', '));
+  console.log('       logged under "' + keys[keys.length-1] + '", not the programmed lift');
+});
+
+await check('swap reverts and is confined to that day', async () => {
+  const card = page.locator('.ex').nth(1);
+  await card.locator('[data-act="swap"]').click();
+  await page.waitForTimeout(300);
+  await page.click('[data-back]');
+  await page.waitForTimeout(300);
+  if(/swapped from/.test(await page.locator('.ex').nth(1).textContent())) throw new Error('still swapped');
+  const tomorrow = await page.evaluate(() => {
+    const d = new Date(); d.setDate(d.getDate()+9);
+    return Object.keys(Store.session(fmt(d)).swaps).length;
+  });
+  if(tomorrow !== 0) throw new Error('swap leaked to a future session');
+});
+
 await check('progression: maxing the range prescribes more weight next session', async () => {
   // Fill every bench set at 80 kg x 8 (top of the 5-8 range) and tick them.
   const ex = page.locator('.ex').first();

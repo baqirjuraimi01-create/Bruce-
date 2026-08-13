@@ -46,8 +46,9 @@ const Store = (() => {
   }
   function session(d){
     if(!state.sessions[d]){
-      state.sessions[d] = { dayKey: cycleDayFor(d).key, exercises:{}, note:'', done:false };
+      state.sessions[d] = { dayKey: cycleDayFor(d).key, exercises:{}, swaps:{}, note:'', done:false };
     }
+    if(!state.sessions[d].swaps) state.sessions[d].swaps = {};   // records saved before swaps existed
     return state.sessions[d];
   }
   function cardioFor(d){
@@ -194,6 +195,92 @@ const Store = (() => {
     save();
   }
 
+  /* ---------- learned meals ----------
+     What you actually eat, worked out from your own log. A food counts
+     as part of your "usual" for a meal slot once it shows up on at
+     least MIN_DAYS of that meal and in at least MIN_FREQ of them. The
+     amount suggested is the median, so one odd 300 g day does not drag
+     the suggestion around. */
+  const MIN_DAYS = 2, MIN_FREQ = 0.4, LOOKBACK = 60;
+
+  function median(ns){
+    const s = [...ns].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2;
+  }
+
+  function usualMeal(mealKey, beforeDate){
+    const before = beforeDate || today();
+    const seen = {};          // key -> { name, brand, barcode, per100, grams:[], days:Set }
+    let mealDays = 0;
+
+    for(let i = 1; i <= LOOKBACK; i++){
+      const d = addDays(before, -i);
+      const rec = state.days[d];
+      if(!rec) continue;
+      const entries = rec.entries.filter(e => e.meal === mealKey);
+      if(!entries.length) continue;
+      mealDays++;
+
+      for(const e of entries){
+        if(!e.grams) continue;
+        const key = (e.name + '|' + (e.brand || '')).toLowerCase();
+        const r = 100 / e.grams;
+        if(!seen[key]) seen[key] = {
+          name:e.name, brand:e.brand || '', barcode:e.barcode || '',
+          per100:{ kcal:e.kcal*r, p:e.p*r, c:e.c*r, f:e.f*r },
+          grams:[], days:new Set()
+        };
+        seen[key].grams.push(e.grams);
+        seen[key].days.add(d);
+      }
+    }
+
+    if(mealDays < MIN_DAYS) return null;
+
+    const items = Object.values(seen)
+      .map(v => ({
+        name:v.name, brand:v.brand, barcode:v.barcode,
+        kcal:round(v.per100.kcal, 1), p:round(v.per100.p, 1),
+        c:round(v.per100.c, 1), f:round(v.per100.f, 1),
+        grams:round(median(v.grams), 0),
+        count:v.days.size, freq:v.days.size / mealDays,
+        source:'Your usual'
+      }))
+      .filter(v => v.count >= MIN_DAYS && v.freq >= MIN_FREQ)
+      .sort((a, b) => b.freq - a.freq || b.count - a.count);
+
+    return items.length ? { mealDays, items } : null;
+  }
+
+  /* Foods you log most often in a given meal, for the quick-add list. */
+  function frequentFoods(mealKey, n = 15){
+    const seen = {};
+    for(const d of Object.keys(state.days)){
+      for(const e of state.days[d].entries){
+        if(mealKey && e.meal !== mealKey) continue;
+        const key = (e.name + '|' + (e.brand || '')).toLowerCase();
+        if(!seen[key]) seen[key] = { entry:e, count:0, last:d };
+        seen[key].count++;
+        if(d > seen[key].last){ seen[key].last = d; seen[key].entry = e; }
+      }
+    }
+    return Object.values(seen)
+      .sort((a, b) => b.count - a.count || (a.last < b.last ? 1 : -1))
+      .slice(0, n);
+  }
+
+  /* ---------- exercise swaps ---------- */
+  // Machine busy? Log the session against a different exercise for today
+  // only. The replacement keeps its own weight history.
+  function setSwap(dstr, original, replacement){
+    const s = session(dstr);
+    if(!replacement || replacement === original) delete s.swaps[original];
+    else s.swaps[original] = replacement;
+    save();
+  }
+  function swapFor(dstr, original){ return session(dstr).swaps[original] || null; }
+
   /* ---------- steps ---------- */
   function setSteps(dstr, n){
     day(dstr).steps = n > 0 ? Math.round(n) : null;
@@ -248,6 +335,7 @@ const Store = (() => {
     setLog, lastPerformance, sessionVolume,
     addCardio, removeCardio,
     setWeight, weightSeries, setSteps, stepsFor, performanceHistory,
+    setSwap, swapFor, usualMeal, frequentFoods,
     exportJSON, importJSON, reset
   };
 })();
