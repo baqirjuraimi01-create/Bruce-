@@ -72,6 +72,22 @@ console.log('\n— blanks are filled, real values are not overwritten —');
   eq('existing note untouched', merged.note, 'mine');
 }
 
+console.log('\n— watch health fields —');
+{
+  const a = blank(); a.days['d'] = { entries:[], weight:null, steps:null, rhr:null, sleep:null, note:'' };
+  const b = blank(); b.days['d'] = { entries:[], weight:null, steps:8000, akcal:640, exmin:42, rhr:54, sleep:7.5, note:'' };
+  const m1 = M.mergeState(a, b).state.days['d'];
+  eq('active kcal fills the blank', m1.akcal, 640);
+  eq('exercise minutes fill', m1.exmin, 42);
+  eq('resting HR fills', m1.rhr, 54);
+  eq('sleep fills', m1.sleep, 7.5);
+
+  const c = blank(); c.days['d'] = { entries:[], weight:null, steps:9000, akcal:700, exmin:50, rhr:52, sleep:8, note:'' };
+  const m2 = M.mergeState(c, b).state.days['d'];
+  eq('this device keeps its own resting HR', m2.rhr, 52);
+  eq('and its own sleep', m2.sleep, 8);
+}
+
 console.log('\n— training sessions —');
 {
   const a = blank();

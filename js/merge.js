@@ -45,6 +45,10 @@ const Merge = (() => {
       entries: u.out,
       weight:  preferBase(base.weight, incoming.weight),
       steps:   preferBase(base.steps,  incoming.steps),
+      akcal:   preferBase(base.akcal,  incoming.akcal),
+      exmin:   preferBase(base.exmin,  incoming.exmin),
+      rhr:     preferBase(base.rhr,    incoming.rhr),
+      sleep:   preferBase(base.sleep,  incoming.sleep),
       note:    preferBase(base.note,   incoming.note)
     };
   }

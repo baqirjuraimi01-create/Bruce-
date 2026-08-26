@@ -328,12 +328,39 @@ const Store = (() => {
   }
   function swapFor(dstr, original){ return session(dstr).swaps[original] || null; }
 
-  /* ---------- steps ---------- */
+  /* ---------- steps + Watch health ---------- */
   function setSteps(dstr, n){
     day(dstr).steps = n > 0 ? Math.round(n) : null;
     save();
   }
   function stepsFor(dstr){ return day(dstr).steps || 0; }
+
+  // What the Watch writes into Apple Health, per day:
+  //   akcal = active energy (kcal), exmin = exercise minutes,
+  //   rhr = resting heart rate (bpm), sleep = hours slept.
+  const HEALTH_FIELDS = ['akcal','exmin','rhr','sleep'];
+  function setHealth(dstr, values){
+    const d = day(dstr);
+    for(const k of HEALTH_FIELDS){
+      if(values[k] === undefined) continue;
+      const n = parseFloat(values[k]);
+      d[k] = (isFinite(n) && n > 0) ? round(n, k === 'sleep' ? 1 : 0) : null;
+    }
+    save();
+  }
+  function healthFor(dstr){
+    const d = day(dstr);
+    return { akcal:d.akcal || null, exmin:d.exmin || null, rhr:d.rhr || null, sleep:d.sleep || null };
+  }
+  function healthSeries(field, beforeDate, n = 14){
+    const out = [];
+    for(let i = n - 1; i >= 0; i--){
+      const dt = addDays(beforeDate, -i);
+      const rec = state.days[dt];
+      out.push({ date:dt, v: rec && rec[field] ? rec[field] : null });
+    }
+    return out;
+  }
 
   /* The last n sessions for one exercise, newest first. */
   function performanceHistory(exName, beforeDate, n = 2){
@@ -391,7 +418,7 @@ const Store = (() => {
     saveFood, foodByBarcode, allFoods, recentFoods,
     setLog, lastPerformance, sessionVolume,
     addCardio, removeCardio,
-    setWeight, weightSeries, setSteps, stepsFor, performanceHistory,
+    setWeight, weightSeries, setSteps, stepsFor, setHealth, healthFor, healthSeries, performanceHistory,
     setSwap, swapFor, usualMeal, frequentFoods,
     exercisesFor, isCustom, setRoutine, resetRoutine, dayPlan, dayPlanFor, effectivePlan,
     exportJSON, importJSON, mergeJSON, reset, onSave, snapshot, replaceState

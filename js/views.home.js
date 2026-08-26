@@ -60,17 +60,21 @@ const HomeView = (() => {
       </div>
 
       <div class="card">
-        ${cardHead("Today's targets", 'goFood')}
-        ${statCols([
-          { value: tot.kcal.toLocaleString(), unit:'', label:`of ${tgt.kcal.toLocaleString()} kcal`, pct:(tot.kcal/tgt.kcal)*100, color:'var(--ink)' },
-          { value: tot.p, unit:'g', label:`of ${tgt.protein}g protein`, pct:(tot.p/tgt.protein)*100, color:'var(--blue)' },
-          { value: Store.stepsFor(date).toLocaleString(), unit:'', label:`of ${Store.state.settings.stepGoal.toLocaleString()} steps`, pct:(Store.stepsFor(date)/Store.state.settings.stepGoal)*100, color:'var(--lime)' }
+        ${cardHead("Today's rings", 'goFood')}
+        ${rings([
+          { pct:(tot.p/tgt.protein)*100, color:'var(--blue)', label:'Protein',
+            value:`${tot.p} / ${tgt.protein} g` },
+          { pct:(tot.kcal/tgt.kcal)*100, color:'var(--ink)', label:'Calories',
+            value:`${tot.kcal.toLocaleString()} / ${tgt.kcal.toLocaleString()}` },
+          { pct:(Store.stepsFor(date)/Store.state.settings.stepGoal)*100, color:'var(--lime)', label:'Steps',
+            value:`${Store.stepsFor(date).toLocaleString()} / ${Store.state.settings.stepGoal.toLocaleString()}` }
         ])}
+        ${watchLine(date)}
         <div class="hr"></div>
         <div class="row wrap" style="gap:8px">
           <button class="btn ghost sm grow" data-act="goFood">Log food</button>
           <button class="btn ghost sm grow" data-act="goCardio">Log run</button>
-          <button class="btn ghost sm grow" data-act="steps">Steps</button>
+          <button class="btn ghost sm grow" data-act="steps">Watch data</button>
         </div>
       </div>
 
@@ -81,6 +85,17 @@ const HomeView = (() => {
       </div>
     `;
     wire(root, date);
+  }
+
+  /* One quiet line of Watch context under the rings, only when it exists. */
+  function watchLine(date){
+    const h = Store.healthFor(date);
+    const bits = [];
+    if(h.akcal) bits.push(h.akcal + ' active kcal');
+    if(h.exmin) bits.push(h.exmin + ' exercise min');
+    if(h.rhr)   bits.push(h.rhr + ' bpm resting');
+    if(h.sleep) bits.push(h.sleep + ' h sleep');
+    return bits.length ? `<div class="tiny muted" style="margin-top:12px">Watch: ${esc(bits.join(' · '))}</div>` : '';
   }
 
   function greeting(){
@@ -203,16 +218,34 @@ const HomeView = (() => {
   }
 
   function openSteps(date){
+    const h = Store.healthFor(date);
     openSheet(`
-      <h2>Steps</h2>
-      <label class="f"><span>Steps on ${esc(prettyDate(date))}</span>
-        <input type="number" id="stIn" inputmode="numeric" placeholder="8000" value="${Store.stepsFor(date) || ''}"></label>
+      <h2>Watch data</h2>
+      <div class="hint" style="margin-top:-6px">Read these off your watch or Apple Health for ${esc(prettyDate(date).toLowerCase())} — or set up the Shortcut in the README and your phone fills them in by itself. Leave blank anything you do not track.</div>
+      <div class="sp"></div>
+      <div class="grid2">
+        <label class="f"><span>Steps</span>
+          <input type="number" id="stIn" inputmode="numeric" placeholder="8000" value="${Store.stepsFor(date) || ''}"></label>
+        <label class="f"><span>Active energy (kcal)</span>
+          <input type="number" id="akIn" inputmode="numeric" placeholder="600" value="${h.akcal || ''}"></label>
+        <label class="f"><span>Exercise minutes</span>
+          <input type="number" id="exIn" inputmode="numeric" placeholder="40" value="${h.exmin || ''}"></label>
+        <label class="f"><span>Resting heart rate</span>
+          <input type="number" id="rhIn" inputmode="numeric" placeholder="55" value="${h.rhr || ''}"></label>
+      </div>
+      <label class="f"><span>Sleep (hours)</span>
+        <input type="number" id="slIn" inputmode="decimal" step="0.1" placeholder="7.5" value="${h.sleep || ''}"></label>
       <button class="btn wide" id="save">Save</button>
-      <div class="hint">Read it off your tracker, or set up the Shortcut in the README so your phone fills this in automatically.</div>
     `, body => {
       body.querySelector('#save').onclick = () => {
         Store.setSteps(date, parseFloat(body.querySelector('#stIn').value) || 0);
-        closeSheet(); toast('Steps saved'); App.refresh();
+        Store.setHealth(date, {
+          akcal: body.querySelector('#akIn').value,
+          exmin: body.querySelector('#exIn').value,
+          rhr:   body.querySelector('#rhIn').value,
+          sleep: body.querySelector('#slIn').value
+        });
+        closeSheet(); toast('Saved'); App.refresh();
       };
     });
   }

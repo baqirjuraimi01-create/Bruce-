@@ -55,12 +55,40 @@ await check('home shows today\'s session and first-lift prescription', async () 
   if(!/Push/.test(t)) throw new Error('session name missing');
   if(!/Barbell Bench Press/.test(t)) throw new Error('next-up prescription missing');
 });
-await check('manual step entry', async () => {
+await check('home shows the three rings, protein outermost', async () => {
+  const labels = await page.$$eval('.ringrow .ringlabel', e => e.map(x => x.textContent.trim()));
+  if(labels.join(',') !== 'Protein,Calories,Steps') throw new Error('rings: ' + labels.join(','));
+  const circles = await page.$$eval('.ringsvg circle', e => e.length);
+  if(circles < 3) throw new Error('only ' + circles + ' circles drawn');
+});
+
+await check('watch data sheet saves every field', async () => {
   await page.click('[data-act="steps"]');
   await page.fill('#stIn', '8432');
+  await page.fill('#akIn', '640');
+  await page.fill('#exIn', '42');
+  await page.fill('#rhIn', '54');
+  await page.fill('#slIn', '7.5');
   await page.click('#save');
   await page.waitForTimeout(300);
-  if(!/8,432/.test(await page.textContent('#view'))) throw new Error('steps not shown');
+  const t = await page.textContent('#view');
+  if(!/8,432/.test(t)) throw new Error('steps not shown');
+  if(!/640 active kcal/.test(t) || !/54 bpm resting/.test(t) || !/7\.5 h sleep/.test(t))
+    throw new Error('watch line missing: ' + (t.match(/Watch:[^<]*/) || ['none'])[0]);
+  console.log('       ' + (t.match(/Watch: [^·]*·[^·]*·[^·]*·[^\n]*/) || ['watch line ok'])[0].trim().slice(0, 80));
+});
+
+await check('beating a ring target draws the overflow lap', async () => {
+  // 12,000 steps against a 10,000 goal = 120% — lap two must appear, not clamp
+  await page.evaluate(() => { Store.setSteps(today(), 12000); });
+  await page.click('[data-tab="food"]'); await page.waitForTimeout(150);
+  await page.click('[data-tab="home"]'); await page.waitForTimeout(300);
+  const pcts = await page.$$eval('.ringpct', e => e.map(x => x.textContent.trim()));
+  if(!pcts.includes('120%')) throw new Error('pcts: ' + pcts.join(','));
+  const thin = await page.$$eval('.ringsvg circle[opacity]', e => e.length);
+  if(thin < 1) throw new Error('no overflow lap drawn');
+  console.log('       120% of step goal → second lap drawn');
+  await page.evaluate(() => { Store.setSteps(today(), 8432); });
 });
 
 console.log('— food tab —');
@@ -153,9 +181,14 @@ await check('macros update after preset', async () => {
   console.log('       logged so far =', n, 'kcal');
 });
 await check('protein number is sane for breakfast preset', async () => {
+  // protein moved from a stat column to its own ring beside the calorie donut
+  const donuts = await page.$$eval('.donutwrap.dual .donut', e => e.length);
+  if(donuts !== 2) throw new Error('expected kcal + protein donuts, got ' + donuts);
+  const protein = await page.locator('.donutwrap.dual .donut').nth(1).textContent();
+  if(!/g protein/.test(protein)) throw new Error('second donut is not protein: ' + protein.trim());
   const rows = await page.$$eval('.stat', els => els.map(e => e.textContent.replace(/\s+/g,' ').trim()));
-  if(rows.length !== 3) throw new Error('expected 3 macro columns, got ' + rows.length);
-  console.log('       ' + rows.join(' | '));
+  if(rows.length !== 2) throw new Error('expected carbs + fat columns, got ' + rows.length);
+  console.log('       protein ring: ' + protein.replace(/\s+/g,' ').trim() + ' | ' + rows.join(' | '));
 });
 await check('search sheet opens + local search works', async () => {
   await page.click('[data-act="search"]');
@@ -738,6 +771,7 @@ await check('?steps= imports and is stripped from the URL', async () => {
   if(/steps=/.test(page.url())) throw new Error('query string not stripped: ' + page.url());
   console.log('       imported 11,750 and cleaned the URL');
 });
+
 await check('a refresh does not re-import', async () => {
   await page.reload({ waitUntil:'networkidle' });
   await page.waitForTimeout(300);
@@ -757,10 +791,38 @@ await check('?date= targets a specific day', async () => {
   console.log('       back-dated 6,100 without touching today');
 });
 await check('garbage input is ignored, not stored', async () => {
+  const before = await page.evaluate(() => Store.stepsFor(today()));
   await page.goto(`http://localhost:${process.env.PORT || 8765}/index.html?steps=notanumber`, { waitUntil:'networkidle' });
   await page.waitForTimeout(300);
   const v = await page.evaluate(() => Store.stepsFor(today()));
-  if(v !== 11750) throw new Error('bad value clobbered the real one: ' + v);
+  if(v !== before) throw new Error(`bad value clobbered the real one: ${before} -> ${v}`);
+});
+
+await check('the full watch payload imports in one URL', async () => {
+  await page.goto(`http://localhost:${process.env.PORT || 8765}/index.html?steps=9100&akcal=712&exmin=38&rhr=53&sleep=7.2`,
+                  { waitUntil:'networkidle' });
+  await page.waitForTimeout(400);
+  const h = await page.evaluate(() => Object.assign({ steps: Store.stepsFor(today()) }, Store.healthFor(today())));
+  const want = { steps:9100, akcal:712, exmin:38, rhr:53, sleep:7.2 };
+  for(const k in want) if(h[k] !== want[k]) throw new Error(k + ' = ' + h[k] + ', wanted ' + want[k]);
+  if(/akcal=/.test(page.url())) throw new Error('query not stripped');
+  console.log('       steps, active kcal, exercise min, resting HR and sleep all landed');
+});
+
+await check('recovery cards appear once the watch feeds them', async () => {
+  await page.evaluate(() => {
+    const d = n => { const x = new Date(); x.setDate(x.getDate()-n); return x.toISOString().slice(0,10); };
+    for(let i = 1; i <= 7; i++) Store.setHealth(d(i), { rhr: 52 + (i%3), sleep: 6.8 + (i%4)*0.3 });
+  });
+  await page.click('[data-tab="progress"]'); await page.waitForTimeout(300);
+  await page.locator('.seg button', { hasText:'Body' }).click(); await page.waitForTimeout(300);
+  const t = await page.textContent('#view');
+  if(!/Resting heart rate/.test(t)) throw new Error('no resting HR card');
+  if(!/Sleep/.test(t)) throw new Error('no sleep card');
+  if(!/14-day average/.test(t)) throw new Error('no averages');
+  console.log('       resting HR + sleep trends rendered with advice');
+  await page.locator('.seg button', { hasText:'Nutrition' }).click(); await page.waitForTimeout(200);
+  await page.click('[data-tab="home"]'); await page.waitForTimeout(200);
 });
 
 console.log('— barcode lookup (Open Food Facts, intercepted fixtures) —');

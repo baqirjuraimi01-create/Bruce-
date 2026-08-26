@@ -51,6 +51,7 @@ const ProgressView = (() => {
         </div>`,
 
       body: `
+        ${healthCards(date)}
         <div class="card">
           ${cardHead('Bodyweight')}
           ${w.length >= 2 ? `
@@ -202,6 +203,63 @@ const ProgressView = (() => {
         catch(e){ toast('Select the code above and copy it'); }
       };
     });
+  }
+
+  /* Watch recovery trends. Only rendered once there is data, so the tab
+     is unchanged for anyone not feeding it. */
+  function healthCards(date){
+    const rhr = Store.healthSeries('rhr', date, 14).filter(x => x.v);
+    const slp = Store.healthSeries('sleep', date, 14).filter(x => x.v);
+    if(!rhr.length && !slp.length) return '';
+
+    const avg = xs => round(xs.reduce((a, x) => a + x.v, 0) / xs.length, 1);
+    const sparkOf = (series, color) => {
+      const all = Store.healthSeries(series === 'rhr' ? 'rhr' : 'sleep', date, 14);
+      const vals = all.filter(x => x.v).map(x => x.v);
+      if(!vals.length) return '';
+      const lo = Math.min(...vals) * 0.92, hi = Math.max(...vals) * 1.04;
+      return `<div class="spark">${all.map(x => x.v
+        ? `<i style="height:${clamp(((x.v - lo)/(hi - lo))*100, 6, 100)}%;background:${color}" title="${x.date}: ${x.v}"></i>`
+        : `<i class="miss" style="height:6%"></i>`).join('')}</div>`;
+    };
+
+    let html = '';
+    if(rhr.length >= 2){
+      const recent = avg(rhr.slice(-3)), base = avg(rhr);
+      const up = recent - base;
+      html += `
+        <div class="card">
+          ${cardHead('Resting heart rate')}
+          <div class="row between">
+            <div><div class="kcal-big mono">${rhr[rhr.length-1].v}<sup>bpm</sup></div>
+              <div class="small muted" style="margin-top:4px">14-day average ${base}</div></div>
+            <div class="right"><div class="mono" style="font-size:18px;font-weight:500">${up >= 0 ? '+' : ''}${round(up,1)}</div>
+              <div class="small muted">last 3 days vs average</div></div>
+          </div>
+          ${sparkOf('rhr', 'var(--pink)')}
+          <div class="hint">${up >= 4
+            ? 'Noticeably elevated. That is the classic under-recovery signal — poor sleep, illness brewing, or too much load. Make today easier than planned.'
+            : up >= 2
+              ? 'Slightly up on your average. Worth watching; one high day means nothing, three in a row means back off.'
+              : 'Steady. Recovery looks fine — train as planned.'}</div>
+        </div>`;
+    }
+    if(slp.length >= 2){
+      const a = avg(slp);
+      html += `
+        <div class="card">
+          ${cardHead('Sleep')}
+          <div class="row between">
+            <div><div class="kcal-big mono">${slp[slp.length-1].v}<sup>h last night</sup></div>
+              <div class="small muted" style="margin-top:4px">14-day average ${a} h</div></div>
+          </div>
+          ${sparkOf('sleep', 'var(--blue)')}
+          <div class="hint">${a < 7
+            ? 'Averaging under 7 hours. This is the cheapest gain available to you — muscle is built in bed, and lifting hard on short sleep is how progress stalls and joints start complaining.'
+            : 'Averaging ' + a + ' hours. Good — this is where the adaptation actually happens.'}</div>
+        </div>`;
+    }
+    return html;
   }
 
   function last(date, n){

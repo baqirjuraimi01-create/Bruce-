@@ -22,14 +22,19 @@ Pages gives you that).
 ## What's in it
 
 **Home** — what to do today (session name, first lift's prescription, scheduled
-run), today's calorie / protein / step numbers, and an **Objectives** panel that
+run), Watch-style **activity rings** — protein outermost, then calories, then
+steps, with a second lap drawn when a target is beaten rather than clamping —
+a line of Watch context (active energy, exercise minutes, resting HR, sleep),
+and an **Objectives** panel that
 scores the four goals this app was built around: strength & muscle (main lifts
 that beat their last top set), running (minutes vs what the rotation asks for
 across 7 days), core strength and leg stability (tagged sets completed vs
 prescribed so far this cycle), plus protein adherence. Everything is derived
 from what you already log — no extra tracking.
 
-**Food** — daily calories and macros against your targets, split by meal.
+**Food** — a calorie donut and a **protein ring** side by side (protein is the
+number this app treats as the one that matters), carbs and fat as thin bars,
+all split by meal below.
 Log food by scanning a barcode, searching, or tapping a meal. Bodyweight goes
 in here too.
 
@@ -225,41 +230,56 @@ rich sauces, frying and big portions, capped at ±35%. The midpoint is logged.
 
 The component values are in the tables at the top of the module.
 
-## Steps and your fitness tracker
+## Apple Watch, steps and health data
 
-Steps can be entered by hand on Home or the Cardio tab, and the daily goal is
-set in Progress → Targets.
-
-They can also be pushed in by URL, which is what makes automation possible:
+A web app cannot talk to a watch directly — Safari has no Web Bluetooth, and
+Apple Health is native-only. But the Watch writes everything into Apple Health,
+and an iOS Shortcut can read Health and hand it to the app by URL:
 
 ```
-https://<your-site>/index.html?steps=8432
-https://<your-site>/index.html?steps=8432&date=2026-08-13
+https://<your-site>/index.html?steps=8432&akcal=650&exmin=42&rhr=54&sleep=7.5
 ```
 
-The value is saved, then the query string is stripped from the address bar so a
-refresh cannot double-import. A missing or malformed `date` falls back to
-today; a non-numeric `steps` is ignored rather than stored.
+Any subset of the parameters works; `&date=YYYY-MM-DD` back-dates. Values are
+saved, then the query string is stripped so a refresh cannot double-import;
+junk is ignored rather than stored. Everything can also be typed by hand:
+Home → **Watch data**.
 
-### iOS Shortcut
+| Param | Health sample | Why it is worth tracking |
+|---|---|---|
+| `steps` | Steps (Sum) | General activity floor |
+| `akcal` | Active Energy (Sum) | Calibrates your calorie target against reality |
+| `exmin` | Exercise Minutes (Sum) | Confirms the rotation's cardio is happening |
+| `rhr` | Resting Heart Rate (Average) | The classic under-recovery signal — a 3-day rise means back off |
+| `sleep` | Sleep hours | The biggest recovery lever there is |
 
-1. Shortcuts app → **+** → **Add Action** → *Find Health Samples where* →
-   Type = **Steps**, sort by Start Date, and set the date range to **Today**
-2. Add *Calculate Statistics* → **Sum** over the Health Samples
-3. Add *Text* → `https://<your-site>/index.html?steps=` then insert the
-   Statistics result
-4. Add *Open URLs* with that text
-5. Optionally: Automation tab → daily at 22:00 → run this Shortcut, and turn
-   off *Ask Before Running*
+Deliberately not imported: stand hours and move streaks (noise for these
+goals), HRV (too volatile day-to-day to act on without more context), and
+workout detail (the app's own session log is the source of truth for lifting).
 
-### What will and will not connect
+Resting heart rate and sleep get trend cards under **Progress → Body** once
+data arrives — 14-day average, sparkline, and plain advice when the trend says
+to ease off.
 
-A web app cannot talk to a Bluetooth tracker on iOS — Safari has no Web
-Bluetooth — and it cannot read Apple Health, which is native-only. So the
-Shortcut above reads whatever is *already in Apple Health*. Whether your
-tracker's steps are there depends on its companion app: some write to Apple
-Health, some only keep data in their own app. If yours does not, the Shortcut
-still works using your iPhone's own step count, or enter the number by hand.
+### The iOS Shortcut
+
+1. Shortcuts app → **+** → for each metric, add *Find Health Samples where*
+   (Type as in the table, date range **Today**) followed by *Calculate
+   Statistics* (**Sum**, or **Average** for resting heart rate)
+2. Add *Text* → the URL above, inserting each Statistics result after its
+   parameter name
+3. Add *Open URLs* with that text
+4. Automation tab → daily at 22:00 → run it, with *Ask Before Running* off
+
+Start with steps only if the multi-metric version feels fiddly — one *Find
+Health Samples* + *Statistics* pair and `?steps=` is enough to be useful.
+
+### Non-Apple trackers
+
+The Shortcut reads whatever is already in Apple Health. Whether a third-party
+band's numbers are there depends on its companion app — some write to Health,
+some keep data walled in. If yours does not, the iPhone's own step count still
+works, or type numbers in by hand.
 
 ## Sync
 

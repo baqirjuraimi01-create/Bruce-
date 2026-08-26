@@ -40,18 +40,31 @@ const App = (() => {
 
   function setDate(d){ date = d; refresh(); }
 
-  /* An iOS Shortcut (or any link) can push a step count in:
-       .../index.html?steps=8432&date=2026-08-13
-     The parameter is consumed and stripped so a refresh cannot double-import. */
+  /* An iOS Shortcut (or any link) can push what the Watch wrote into
+     Apple Health:
+       .../index.html?steps=8432&akcal=650&exmin=42&rhr=54&sleep=7.5
+     Optionally &date=YYYY-MM-DD. Parameters are consumed and stripped so
+     a refresh cannot double-import; junk values are ignored, not stored. */
   function importFromUrl(){
     const q = new URLSearchParams(location.search);
-    if(!q.has('steps')) return null;
-    const n = parseInt(q.get('steps'), 10);
+    const FIELDS = ['steps','akcal','exmin','rhr','sleep'];
+    if(!FIELDS.some(f => q.has(f))) return null;
+
     const d = /^\d{4}-\d{2}-\d{2}$/.test(q.get('date') || '') ? q.get('date') : today();
     history.replaceState({}, '', location.pathname + location.hash);
-    if(!isFinite(n) || n < 0) return null;
-    Store.setSteps(d, n);
-    return { n, d };
+
+    const got = [];
+    const steps = parseInt(q.get('steps'), 10);
+    if(isFinite(steps) && steps > 0){ Store.setSteps(d, steps); got.push(steps.toLocaleString() + ' steps'); }
+
+    const health = {};
+    for(const [k, label] of [['akcal',' active kcal'],['exmin',' exercise min'],['rhr',' bpm resting'],['sleep',' h sleep']]){
+      const v = parseFloat(q.get(k));
+      if(isFinite(v) && v > 0){ health[k] = v; got.push(round(v, k === 'sleep' ? 1 : 0) + label); }
+    }
+    if(Object.keys(health).length) Store.setHealth(d, health);
+
+    return got.length ? { d, summary: got.join(', ') } : null;
   }
 
   function boot(){
@@ -73,7 +86,7 @@ const App = (() => {
     Sync.onChange(() => { if(tab === 'progress') refresh(); });
 
     refresh();
-    if(imported) toast(imported.n.toLocaleString() + ' steps imported');
+    if(imported) toast('From your watch: ' + imported.summary, 3200);
   }
 
   return { boot, refresh, go, get date(){ return date; } };
